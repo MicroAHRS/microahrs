@@ -1,0 +1,8 @@
+# phpstorm project files
+.idea
+
+# qt creator
+*.pro.user
+
+# windows thumbnail cache
+Thumbs.db
