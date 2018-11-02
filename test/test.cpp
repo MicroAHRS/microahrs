@@ -1,9 +1,18 @@
 
 
-#include "../shared/TQuaternion.h"
+#include "../shared/Geometry/TQuaternionF.h"
+#include "../shared/Geometry/TPoint3F.h"
+
+#include "../shared/Function/TFunction3.h"
+#include "../shared/Function/TFunctionLineF.h"
+
 #include <math.h>
 
-TQuaternionf InitWithAngles ( float yaw, float pitch, float roll )
+
+typedef TFunction3< TFunctionLineF , float> TFunctionCalibrate;
+
+
+TQuaternionF InitWithAngles ( float yaw, float pitch, float roll )
 {
     yaw   *= 0.5f;
     pitch *= 0.5f;
@@ -21,7 +30,7 @@ TQuaternionf InitWithAngles ( float yaw, float pitch, float roll )
     float	sc = sx * cz;
     float	ss = sx * sz;
 
-    return TQuaternionf(cy * cc + sy * ss, cy * sc - sy * cs , cy * ss + sy * cc , cy * cs - sy * sc);
+    return TQuaternionF(cy * cc + sy * ss, cy * sc - sy * cs , cy * ss + sy * cc , cy * cs - sy * sc);
 }
 
 
@@ -46,21 +55,31 @@ float DegToRad(float v) {
     return v / 180.0 * M_PI;
 }
 
+#include "stdio.h"
 int main() {
 
 
-    TQuaternionf q = InitWithAngles( DegToRad(45), 0,  0);
+//    TQuaternionF q = InitWithAngles( DegToRad(45), 0,  0);
 
 
-    TVector3f v(1,0,0);
-    TVector3f v2 = q.rotateVector(v) * 0.5;
+//    TPoint3F v(1,0,0);
+//    TPoint3F v2 = q.rotateVector(v) * 0.5;
 
-    TVector3f v3;
-    rotateAndScaleVector2(q.w,q.x,q.y,q.z, v.x, v.y, v.z, v3.x, v3.y, v3.z );
+//    TPoint3F v3;
+//    rotateAndScaleVector2(q.w,q.x,q.y,q.z, v.x, v.y, v.z, v3.x, v3.y, v3.z );
 
-    int k = 0;
+//    int k = 0;
 
 
+//     TFunctionCalibrate fun(
+//                TFunctionLineF(0.02923636286, -2.442451397), // kx kc
+//                TFunctionLineF(-0.00153622977, -0.512149624),
+//                TFunctionLineF(-0.006581737428, 0.4034881183)
+//                                            );
+//     for(int t=-29;t<=74;t++) {
+//         TPoint3F p = fun(t);
+//         printf("t=%d %f %f %f \n", t , p.x, p.y,p.z );
+//     }
 
 
 }

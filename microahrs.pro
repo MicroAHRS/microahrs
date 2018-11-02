@@ -1,14 +1,35 @@
-HEADERS += \            
-    TQuaternion.h \
-    TVector3.h \
-    AHRSMadgwick.h \
+HEADERS += \                    
     shared/in_range.hpp \
-    shared/max.hpp \
-    shared/TQuaternion.h \
-    shared/TVector3.h \
-    sensor/Adafruit_FXAS21002C.h
+    shared/max.hpp \    
+    sensor/Adafruit_FXAS21002C.h \
+    sensor/Adafruit_Sensor.h \
+    sensor/Adafruit_FXOS8700.h \            
+    sensor/Adafruit_FXAS21002C_termo.h \    
+    shared/Function/TFunction.h \
+    shared/Function/TFunctionLine.h \
+    shared/Function/TFunction3.h \
+    shared/Geometry/TPoint3.h \
+    shared/Geometry/TQuaternion.h \
+    shared/Function/TFunctionLineF.h \
+    shared/Geometry/TQuaternionF.h \
+    shared/Geometry/TPoint3F.h \
+    shared/Geometry/TPoint3D.h \
+    shared/Geometry/TPoint3I.h \
+    TApplicationArduino.h \
+    TAppSettings.h \
+    TAHRSMadgwick.h
 
 SOURCES += \        
-    AHRSMadgwick.cpp \
     test/test.cpp \
-    sensor/Adafruit_FXAS21002C.cpp
+    # sensor/Adafruit_FXAS21002C.cpp \
+    # sensor/Adafruit_FXOS8700.cpp \
+    # sensor/Adafruit_FXAS21002C_termo.cpp \
+    # TApplicationArduino.cpp \
+    # TAHRSMadgwick.cpp \
+
+OTHER_FILES += \
+    microahrs.ino
+
+
+INCLUDEPATH += sensor
+DEFINES *= ARDUINO=200

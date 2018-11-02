@@ -1,7 +1,7 @@
 #ifndef TQUATERNION_H
 #define TQUATERNION_H
 
-#include "TVector3.h"
+#include "TPoint3.h"
 
 template<class T>
 class TQuaternion
@@ -17,7 +17,7 @@ public:
     explicit TQuaternion(T val) { w = x = y = z = val; }
     explicit TQuaternion(T _w, T _x, T _y, T _z ) { w = _w;x = _x;y = _y; z = _z; }
     TQuaternion(const TQuaternion<T>& q) { w = q.w;x = q.x;y = q.y;z = q.z;}
-    explicit TQuaternion(const TVector3<T>& v) { w = 0.0;x = v.x;y=v.y;z=v.z;}
+    explicit TQuaternion(const TPoint3<T>& v) { w = 0.0;x = v.x;y=v.y;z=v.z;}
 
 
     inline TQuaternion<T> operator + () const { return *this;}
@@ -48,7 +48,7 @@ public:
     inline TQuaternion<T> operator - ( const TQuaternion<T>& q2 ) const {
         return TQuaternion<T> ( x - q2.x, y - q2.y, z - q2.z, w - q2.w ); }
 
-    inline TQuaternion<T> operator * ( const TQuaternion<T>& q ) {
+    inline TQuaternion<T> operator * ( const TQuaternion<T>& q ) const {
         return TQuaternion<T> (
                     w * q.w - x * q.x - y * q.y - z * q.z,
                     w * q.x + x * q.w + y * q.z - z * q.y,
@@ -60,10 +60,10 @@ public:
     inline T length() const { return sqrt( lengthSq() );}
     inline TQuaternion<T>& normalize()  { return *this /= length(); }
 
-    inline TVector3<T> toVector3() {return TVector3<T>(x,y,z);}
+    inline TPoint3<T> toVector3() {return TPoint3<T>(x,y,z);}
 
-    TVector3<T> rotateVector ( const TVector3<T>& v ) const {
-        TVector3<T> r;
+    TPoint3<T> rotateVector ( const TPoint3<T>& v ) const {
+        TPoint3<T> r;
         r.x = v.x * (0.5f - y * y - z * z)
             + v.y * (w * z + x * y)
             + v.z * (x * z - w * y);
@@ -82,10 +82,7 @@ public:
         //p *= getInvert();
         //return TVector3<T>( p.x, p.y, p.z );
     }
-
-
 };
 
-typedef TQuaternion<float>  TQuaternionf;
 
 #endif // TQUATERNION_H

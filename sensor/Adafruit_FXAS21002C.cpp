@@ -25,6 +25,41 @@
 
 #include "Adafruit_FXAS21002C.h"
 
+
+/*=========================================================================
+    REGISTERS
+    -----------------------------------------------------------------------*/
+    typedef enum
+    {                                             // DEFAULT    TYPE
+      GYRO_REGISTER_STATUS              = 0x00,
+      GYRO_REGISTER_OUT_X_MSB           = 0x01,
+      GYRO_REGISTER_OUT_X_LSB           = 0x02,
+      GYRO_REGISTER_OUT_Y_MSB           = 0x03,
+      GYRO_REGISTER_OUT_Y_LSB           = 0x04,
+      GYRO_REGISTER_OUT_Z_MSB           = 0x05,
+      GYRO_REGISTER_OUT_Z_LSB           = 0x06,
+      GYRO_REGISTER_WHO_AM_I            = 0x0C,   // 11010111   r
+      GYRO_REGISTER_CTRL_REG0           = 0x0D,   // 00000000   r/w
+      GYRO_REGISTER_CTRL_REG1           = 0x13,   // 00000000   r/w
+      GYRO_REGISTER_CTRL_REG2           = 0x14,   // 00000000   r/w
+
+      GYRO_REGISTER_CTRL_REG3           = 0x15,   // double range  r/w
+      GYRO_REGISTER_TEMP                = 0x12,   // temperature value   r
+    } gyroRegisters_t;
+/*=========================================================================*/
+
+
+/*=========================================================================
+    I2C ADDRESS/BITS AND SETTINGS
+    -----------------------------------------------------------------------*/
+    #define FXAS21002C_ADDRESS       (0x21)       // 0100001
+    #define FXAS21002C_ID            (0xD7)       // 1101 0111
+    #define GYRO_SENSITIVITY_250DPS  (0.0078125F) // Table 35 of datasheet
+    #define GYRO_SENSITIVITY_500DPS  (0.015625F)  // ..
+    #define GYRO_SENSITIVITY_1000DPS (0.03125F)   // ..
+    #define GYRO_SENSITIVITY_2000DPS (0.0625F)    // ..
+/*=========================================================================*/
+
 /***************************************************************************
  PRIVATE FUNCTIONS
  ***************************************************************************/
@@ -73,7 +108,7 @@ byte Adafruit_FXAS21002C::read8(byte reg)
   return value;
 }
 
-float  Adafruit_FXAS21002C::getSensitivity(const gyroRange_t& range ) {
+float  Adafruit_FXAS21002C::getSensitivity(const Adafruit_FXAS21002C::EGyroRange &range ) {
     switch(range)
     {
       case GYRO_RANGE_250DPS:
@@ -88,7 +123,7 @@ float  Adafruit_FXAS21002C::getSensitivity(const gyroRange_t& range ) {
     return GYRO_SENSITIVITY_2000DPS;
 }
 
-byte Adafruit_FXAS21002C::getFullScaleCode(const gyroRange_t& rng )
+byte Adafruit_FXAS21002C::getFullScaleCode(const Adafruit_FXAS21002C::EGyroRange& rng )
 {
     /*
     * 1:0 FullScale
@@ -124,9 +159,7 @@ byte Adafruit_FXAS21002C::getFullScaleCode(const gyroRange_t& rng )
 /**************************************************************************/
 Adafruit_FXAS21002C::Adafruit_FXAS21002C(int32_t sensorID) {
   _sensorID = sensorID;  
-  raw_temperature = 0;
-  _calibration_address = -1;
-  enable_calibration = false;
+  m_raw_temperature = 0;
 }
 
 /***************************************************************************
@@ -138,7 +171,7 @@ Adafruit_FXAS21002C::Adafruit_FXAS21002C(int32_t sensorID) {
     @brief  Setups the HW
 */
 /**************************************************************************/
-bool Adafruit_FXAS21002C::begin(gyroRange_t rng)
+bool Adafruit_FXAS21002C::begin(EGyroRange rng)
 {
   /* Enable I2C */
   Wire.begin();
@@ -147,9 +180,9 @@ bool Adafruit_FXAS21002C::begin(gyroRange_t rng)
   _range = rng;
 
   /* Clear the raw sensor data */
-  raw.x = 0;
-  raw.y = 0;
-  raw.z = 0;
+  m_raw_data.x = 0;
+  m_raw_data.y = 0;
+  m_raw_data.z = 0;
 
   /* Make sure we have the correct chip ID since this checks
      for correct address and that the IC is properly connected */
@@ -220,9 +253,9 @@ bool Adafruit_FXAS21002C::getEvent(sensors_event_t* event, sensors_event_t* temp
     memset(event, 0, sizeof(sensors_event_t));
 
     /* Clear the raw data placeholder */
-    raw.x = 0;
-    raw.y = 0;
-    raw.z = 0;
+    m_raw_data.x = 0;
+    m_raw_data.y = 0;
+    m_raw_data.z = 0;
 
     event->version   = sizeof(sensors_event_t);
     event->sensor_id = _sensorID;
@@ -240,7 +273,7 @@ bool Adafruit_FXAS21002C::getEvent(sensors_event_t* event, sensors_event_t* temp
     Wire.requestFrom((byte)FXAS21002C_ADDRESS, (byte)7);
 
     #if ARDUINO >= 100
-    uint8_t status = Wire.read();
+    /*uint8_t status =*/ Wire.read();
     uint8_t xhi = Wire.read();
     uint8_t xlo = Wire.read();
     uint8_t yhi = Wire.read();
@@ -248,7 +281,7 @@ bool Adafruit_FXAS21002C::getEvent(sensors_event_t* event, sensors_event_t* temp
     uint8_t zhi = Wire.read();
     uint8_t zlo = Wire.read();
     #else
-    uint8_t status = Wire.receive();
+    /*uint8_t status =*/ Wire.receive();
     uint8_t xhi = Wire.receive();
     uint8_t xlo = Wire.receive();
     uint8_t yhi = Wire.receive();
@@ -258,9 +291,9 @@ bool Adafruit_FXAS21002C::getEvent(sensors_event_t* event, sensors_event_t* temp
     #endif
 
     /* Shift values to create properly formed integer */
-    event->gyro.x = (raw.x = (int16_t)((xhi << 8) | xlo));
-    event->gyro.y = (raw.y = (int16_t)((yhi << 8) | ylo));
-    event->gyro.z = (raw.z = (int16_t)((zhi << 8) | zlo));
+    event->gyro.x = (m_raw_data.x = (int16_t)((xhi << 8) | xlo));
+    event->gyro.y = (m_raw_data.y = (int16_t)((yhi << 8) | ylo));
+    event->gyro.z = (m_raw_data.z = (int16_t)((zhi << 8) | zlo));
 
 
     float sensitivity = getSensitivity(_range);
@@ -272,20 +305,11 @@ bool Adafruit_FXAS21002C::getEvent(sensors_event_t* event, sensors_event_t* temp
     event->gyro.z *= sensitivity;
 
     if(temp_event) {
-        raw_temperature = read8(GYRO_REGISTER_TEMP);
-        temp_event->temperature = raw_temperature;
+        m_raw_temperature = read8(GYRO_REGISTER_TEMP);
+        temp_event->temperature = m_raw_temperature;
         temp_event->version   = sizeof(sensors_event_t);
         temp_event->sensor_id = _sensorID;
         temp_event->type      = SENSOR_TYPE_AMBIENT_TEMPERATURE;
-
-        if(enable_calibration) {
-            Vector3f& point = calibratePointGet(raw_temperature);
-            if(point.isInited() && !point.hasNan()) {
-                event->gyro.x += point.x;
-                event->gyro.y += point.y;
-                event->gyro.z += point.z;
-            }
-        }
     }
 
   return true;
@@ -318,62 +342,7 @@ void  Adafruit_FXAS21002C::getSensor(sensor_t* sensor)
   sensor->resolution  = 0.0F; // TBD
 }
 
-#define TEMPERATURE_MIN  -40
-#define TEMPERATURE_MAX  80
-#define CALIB_DATA_ADDRESS_START 0
-#include <EEPROM.h>
 
-int Adafruit_FXAS21002C::calibratePointAddressGet(int8_t temp) {
-    int index = temp - TEMPERATURE_MIN;
-    index = min(max(TEMPERATURE_MIN,index), TEMPERATURE_MAX - 1);
-    return CALIB_DATA_ADDRESS_START + index * sizeof(_calibration_point);
-}
-
-Vector3f& Adafruit_FXAS21002C::calibratePointGet(int8_t temp)
-{
-    int ee_address = calibratePointAddressGet(temp);
-    if(ee_address != _calibration_address) {
-        EEPROM.get(ee_address, _calibration_point);
-        _calibration_address = ee_address;
-    }
-    return _calibration_point;
-}
-
-bool Adafruit_FXAS21002C::calibratePointExist(int8_t temp) {
-    return  calibratePointGet(temp).isInited();
-}
-
-bool Adafruit_FXAS21002C::calibratePointSet(const Vector3f& point, int temp)
-{
-    int ee_address = calibratePointAddressGet(temp);
-    EEPROM.put(ee_address, point);
-    return true;
-}
-
-void Adafruit_FXAS21002C::calibratePrintStatus() {
-
-    for(int t = TEMPERATURE_MIN; t< TEMPERATURE_MAX;t++) {
-        bool exist = calibratePointExist(t);
-        Serial.print(exist?1:0);
-    }
-
-    for(int t = TEMPERATURE_MIN; t< TEMPERATURE_MAX;t++) {
-        Vector3f& point = calibratePointGet(t);
-
-        Serial.print(t);
-        Serial.print(',');
-        Serial.print(point.isInited()?1:0);
-        Serial.print(',');
-        Serial.print(point.x * 1000000);
-        Serial.print(',');
-        Serial.print(point.y * 1000000);
-        Serial.print(',');
-        Serial.print(point.z * 1000000);
-        Serial.println();
-    }
-    Serial.println();
-
-}
 
 
 

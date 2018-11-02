@@ -21,7 +21,7 @@
 //-------------------------------------------------------------------------------------------
 // Header files
 
-#include "AHRSMadgwick.h"
+#include "TAHRSMadgwick.h"
 #include <math.h>
 
 #include "shared/max.hpp"
@@ -43,13 +43,13 @@
 //-------------------------------------------------------------------------------------------
 // AHRS algorithm update
 
-AHRSMadgwick::AHRSMadgwick() {
+TAHRSMadgwick::TAHRSMadgwick() {
     setGyroMeas(gyroMeasError, gyroMeasDrift);
-    m_q = TQuaternionf( 1.0f, 0, 0, 0);
+    m_q = TQuaternionF( 1.0f, 0, 0, 0);
     m_angles_computed = false;
 }
 
-void AHRSMadgwick::setGyroMeas(float error, float drift)
+void TAHRSMadgwick::setGyroMeas(float error, float drift)
 {
     beta = sqrt(3.0f / 4.0f) * (M_PI * (error / 180.0f));
     zeta = sqrt(3.0f / 4.0f) * (M_PI * (drift / 180.0f));
@@ -58,122 +58,58 @@ void AHRSMadgwick::setGyroMeas(float error, float drift)
     zeta  = Clamp(zeta , 0.0f, 1.0f);
 }
 
-//-------------------------------------------------------------------------------------------
-// Fast inverse square-root
-// See: http://en.wikipedia.org/wiki/Fast_inverse_square_root
-
-
-static float invSqrt(float x)
-{
-    return 1.0 / sqrt(x);
-}
-
-template<typename T>
-static inline void normalizeVector(T& vx, T& vy, T& vz) {
-    T recipNorm = invSqrt (vx * vx + vy * vy + vz * vz);
-    vx *= recipNorm;
-    vy *= recipNorm;
-    vz *= recipNorm;
-}
-
-template<typename T>
-static inline T VectorCrossProduct(T& v1x, T& v1y, T& v1z, T& v2x, T& v2y, T& v2z) {
-    return v1x*v2x +  v1y*v2y + v1z*v2z;
-}
-
-template<typename T>
-static inline bool isZeroVector(const T& vx, const T& vy,const T& vz) {
-    return vx == 0.0f && vy == 0.0f && vz == 0.0f;
-}
-
-template<typename T>
-static inline bool isZeroQuaternion(T& q0, T& q1, T& q2, T& q3) {
-    return q0 == 0.0f && q1 == 0.0f && q2 == 0.0f && q3 == 0.0f;
-}
-
-template<typename T>
-static inline void normalizeQuaternion(T& q0, T& q1, T& q2, T& q3) {
-    T recipNorm = invSqrt (q0 * q0 + q1 * q1 + q2 * q2 + q3 * q3);
-    q0 *= recipNorm;
-    q1 *= recipNorm;
-    q2 *= recipNorm;
-    q3 *= recipNorm;
-}
-
-static inline void rotateAndScaleVector(
-    float q0, float q1, float q2, float q3,
-    float _2dx, float _2dy, float _2dz,
-    float& rx, float& ry, float& rz) {
-
-    // result is half as long as input
-    rx = _2dx * (0.5f - q2 * q2 - q3 * q3)
-       + _2dy * (q0 * q3 + q1 * q2)
-       + _2dz * (q1 * q3 - q0 * q2);
-    ry = _2dx * (q1 * q2 - q0 * q3)
-       + _2dy * (0.5f - q1 * q1 - q3 * q3)
-       + _2dz * (q0 * q1 + q2 * q3);
-    rz = _2dx * (q0 * q2 + q1 * q3)
-       + _2dy * (q2 * q3 - q0 * q1)
-       + _2dz * (0.5f - q1 * q1 - q2 * q2);
-}
-
-/**
- *
- *
- *
-*/
-
-static inline TVector3f compensateMagneticDistortion(
-        const TQuaternionf& q,
-        const TVector3f& mag)
+static inline TPoint3F compensateMagneticDistortion(
+        const TQuaternionF& q,
+        const TPoint3F& mag)
 {
     // Reference direction of Earth's magnetic field (See EQ 46)
-    TVector3f result = q.getInvert().rotateVector(mag);
-    // получили вектор в системе Земли
+    TPoint3F result = q.getInvert().rotateVector(mag);
+    // now we have vector in Earth system
+    float zz = result.z * result.z;
     result.y = 0;
-    result.x = (result.z == 1.0) ? 0 : sqrt(1.0 - (result.z * result.z));
+    result.x = (zz >= 1.0) ? 0 : sqrt(1.0 - zz);
     return result;
 }
 
 
-static inline TVector3f removeMagneticVertical(
-        const TQuaternionf& q,
-        const TVector3f& mag)
+static inline TPoint3F removeMagneticVertical(
+        const TQuaternionF& q,
+        const TPoint3F& mag)
 {
-    // получили вектор в системе Земли
-    TVector3f result = q.getInvert().rotateVector(mag);
-    // убираем веритикаль
+    // now we have vector in Earth ref system
+    TPoint3F result = q.getInvert().rotateVector(mag);
+    // remove vertical component
     result.z = 0;
-    // обратно возвращаем в систему датчика
+    // return vector to Device ref system
     return q.rotateVector(result);
 }
 
 
-static inline TQuaternionf orientationChangeFromGyro(
-    const TQuaternionf& q,
-    const TVector3f& gyro)
+static inline TQuaternionF orientationChangeFromGyro(
+    const TQuaternionF& q,
+    const TPoint3F& gyro)
 {
     // Rate of change of quaternion from gyroscope
     // See EQ 12    
     // Qdot = 0.5 * q * gyro
-    return  q * 0.5f * TQuaternionf(gyro);
+    return  q * 0.5f * TQuaternionF(gyro);
 }
 
 
 
-static TQuaternionf addGradientDescentStep(
-    const TQuaternionf& q,     // текущая ориентация
-    const TVector3f& dest,     // вектор в системе Земли целевой - длинна 2
-    const TVector3f& source    // вектор в локальной систее - длинна 1
+static TQuaternionF addGradientDescentStep(
+    const TQuaternionF& q,     // текущая ориентация
+    const TPoint3F& dest,     // вектор в системе Земли целевой - длинна 2
+    const TPoint3F& source    // вектор в локальной систее - длинна 1
         )
 {    
-    TQuaternionf result;
+    TQuaternionF result;
 
     // Gradient decent algorithm corrective step
     // EQ 15, 21    
-    TVector3f dest_local = q.rotateVector(dest);
-    TVector3f delta = dest_local - source;
-    TVector3f d2 = dest*2;
+    TPoint3F dest_local = q.rotateVector(dest);
+    TPoint3F delta = dest_local - source;
+    TPoint3F d2 = dest*2;
 
     // EQ 22, 34
     // Jt * f
@@ -202,82 +138,81 @@ static TQuaternionf addGradientDescentStep(
 
 
 static inline void compensateGyroDrift(
-        const TQuaternionf& q,     // текущая ориентация
-        const TQuaternionf& s,        // поправка кватрениона
+        const TQuaternionF& q,     // текущая ориентация
+        const TQuaternionF& s,        // поправка кватрениона
         float dt,
         float zeta,
-        TVector3f& gyro_err)
+        TPoint3F& gyro_err)
 {   
     // w_err = 2 q x s
     if(zeta == 0)
         return;
-    TVector3f err = (q * s).toVector3() * 2.0f;
+    TPoint3F err = (q * s).toVector3() * 2.0f;
     gyro_err +=  err * dt * zeta;
 }
 
 
-inline TQuaternionf CorrectiveStepAccel(const TQuaternionf& q,TVector3f acc)
+inline TQuaternionF CorrectiveStepAccel(const TQuaternionF& q,TPoint3F acc)
 {
     if(acc.isZero())
-        return TQuaternionf();
+        return TQuaternionF();
 
     acc.normalize();
-    const TVector3f earth_gravity(0.0f, 0.0f, 1.0f);
+    const TPoint3F earth_gravity(0.0f, 0.0f, 1.0f);
     return addGradientDescentStep(q, earth_gravity, acc);
 }
 
 
-inline TQuaternionf CorrectiveStepMag(const TQuaternionf& q,TVector3f mag, bool yaw_only)
+inline TQuaternionF CorrectiveStepMag(const TQuaternionF& q,TPoint3F mag, bool yaw_only)
 {
     if(mag.isZero())
-        return TQuaternionf();
+        return TQuaternionF();
     mag.normalize();
 
     if(yaw_only)
         mag = removeMagneticVertical(q, mag);
 
     if(mag.isZero())
-        return TQuaternionf();
+        return TQuaternionF();
     mag.normalize();
 
-    TVector3f mag_dest = (yaw_only) ? TVector3f(1.0f, 0.0f, 0.0f) : compensateMagneticDistortion(q, mag);
+    TPoint3F mag_dest = (yaw_only) ? TPoint3F(1.0f, 0.0f, 0.0f) : compensateMagneticDistortion(q, mag);
     return addGradientDescentStep(q, mag_dest, mag);
 }
 
 
 //////////////////////////////////////////////////////////////////
 
-void AHRSMadgwick::update(const TVector3f& gyro, TVector3f acc, TVector3f mag, float dt)
+void TAHRSMadgwick::update(TPoint3F gyro, TPoint3F acc, TPoint3F mag, float dt)
 {
-    TQuaternionf q_dot;
+    TQuaternionF q_dot;
 
-    gyro -= m_gyro_error;
+    gyro -= m_gyro_avarage;
     q_dot = orientationChangeFromGyro(m_q, gyro);
 
-    TQuaternionf s;
+    TQuaternionF s;
     s += CorrectiveStepAccel(m_q, acc);
     s += CorrectiveStepMag(m_q, mag, true);
 
     if(!s.isZero()) {
         s.normalize();
         q_dot -= s * beta;
-        compensateGyroDrift(m_q, s, dt, zeta, m_gyro_error);
+        compensateGyroDrift(m_q, s, dt, zeta, m_gyro_avarage);
     }
 
     // Integrate rate of change of quaternion to yield quaternion
     m_q += q_dot * dt;
-
     m_q.normalize();
-    m_angles_computed = 0;
+    m_angles_computed = false;
 }
 
 //-------------------------------------------------------------------------------------------
 
-void AHRSMadgwick::computeAngles()
+void TAHRSMadgwick::computeAngles()
 {
-    float roll = atan2f(m_q.w*m_q.x + m_q.y*m_q.z, 0.5f - m_q.x*m_q.x - m_q.y*m_q.y); // roll
+    float roll  = atan2f(m_q.w*m_q.x + m_q.y*m_q.z, 0.5f - m_q.x*m_q.x - m_q.y*m_q.y); // roll
     float pitch = asinf(-2.0f * (m_q.x*m_q.z - m_q.w*m_q.y));
-    float yaw = atan2f(m_q.x*m_q.y + m_q.w*m_q.z, 0.5f - m_q.y*m_q.y - m_q.z*m_q.z);
-    m_angles = TVector3f(roll, pitch, yaw);
+    float yaw   = atan2f(m_q.x*m_q.y + m_q.w*m_q.z, 0.5f - m_q.y*m_q.y - m_q.z*m_q.z);
+    m_angles = TPoint3F(roll, pitch, yaw);
     m_angles_computed = true;
 }

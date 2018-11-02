@@ -16,35 +16,33 @@
 //=============================================================================================
 #ifndef __Madgwick2_h__
 #define __Madgwick2_h__
-#include <math.h>
-#include "shared/TVector3.h"
-#include "shared/TQuaternion.h"
+
+#include "shared/Geometry/TPoint3F.h"
+#include "shared/Geometry/TQuaternionF.h"
 
 //--------------------------------------------------------------------------------------------
 // Variable declaration
-class AHRSMadgwick{
+class TAHRSMadgwick{
 public:
     float beta;
     float zeta;
 
-    TQuaternionf m_q;
-    TVector3f    m_gyro_error;
-
-    TVector3f    m_angles; //(roll,pitch,yaw)
+    TQuaternionF m_q;
+    TPoint3F     m_gyro_avarage;
+    TPoint3F     m_angles; //(roll,pitch,yaw)
     bool         m_angles_computed;
 public:
-    AHRSMadgwick(void);
-
+    TAHRSMadgwick();
 
     void setGyroMeas(float error, float drift);
-    void update(const TVector3f& gyro, TVector3f acc, TVector3f mag, float dt);
+    void update(TPoint3F gyro, TPoint3F acc, TPoint3F mag, float dt);
 
-    const TVector3f& getAngles() { if (!m_angles_computed) {computeAngles();} return m_angles; }
+    const TPoint3F& getAngles() { if (!m_angles_computed) {computeAngles();} return m_angles; }
     inline float getRoll()  { return getAngles().x * 57.29578f;}
     inline float getPitch() { return getAngles().y * 57.29578f;}
-    inline float getYaw()   { return getAngles().z * 57.29578f  + 180;}
+    inline float getYaw()   { return getAngles().z * 57.29578f;}
+
 protected:
     void computeAngles();
-
 };
 #endif
