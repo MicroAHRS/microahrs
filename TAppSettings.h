@@ -43,11 +43,13 @@ public:
         beta       = 0.2;
 
         zeta_start = 0.05;
-        zeta       = 0.002;
+        zeta       = 0.005 ;
 
+
+        beta_init_time_ms  = 3000;
+        zeta_init_time_ms  = 6000;
         total_init_time_ms = 7000;
-        beta_init_time_ms = 3000;
-        zeta_init_time_ms = 3000;
+
         print_out_time_ms = 1000 / 20;
         disable_gyro = false;
         disable_acc  = false;

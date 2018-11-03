@@ -45,6 +45,7 @@ public:
     void resetPitchRoll();
     void setRollPitchByAccelerometer(const TPoint3F& acc);
     void setYawByMagnetometer(const TPoint3F& mag);
+    void setGyroAvarage(const TPoint3F& mag);
 
 protected:
     void computeAngles();

@@ -130,9 +130,13 @@ void TApplication::updateDriftCoefByTime(float /*dt*/)
         return;
 
     if(ts < m_settings.beta_init_time_ms) {
-        m_ahrs.setGyroMeas(m_settings.beta_start, 0);
-    } else if(ts < (m_settings.beta_init_time_ms + m_settings.zeta_init_time_ms)) {
-        float progress = GetProgressSection(ts, m_settings.beta_init_time_ms , m_settings.beta_init_time_ms + m_settings.zeta_init_time_ms);
+        float progress = GetProgressSection(ts, 0, m_settings.beta_init_time_ms);
+        progress = 0;
+        float b = m_settings.beta_start * (1- progress) + m_settings.beta * progress;
+        m_ahrs.setGyroMeas(b, 0);
+    } else if(ts < m_settings.zeta_init_time_ms) {
+        float progress = GetProgressSection(ts, m_settings.beta_init_time_ms , m_settings.zeta_init_time_ms);
+        progress = 0;
         float z = m_settings.zeta_start * (1- progress)  + m_settings.zeta * progress;
         m_ahrs.setGyroMeas(m_settings.beta, z);
     } else {
@@ -212,6 +216,7 @@ void TApplication::onCommandResetPitchRoll() {
 void TApplication::onCommandResetYawByMag()
 {
     m_ahrs.setYawByMagnetometer(getMagn());
+    //m_ahrs.setGyroAvarage(getGyro());
 }
 
 void TApplication::receiveCmd() {

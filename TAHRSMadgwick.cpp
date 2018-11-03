@@ -220,6 +220,10 @@ void TAHRSMadgwick::setYawByMagnetometer(const TPoint3F& mag) {
     m_q = TQuaternionF::CreateFormAngles(0,0,yaw);
 }
 
+void TAHRSMadgwick::setGyroAvarage(const TPoint3F& gyro) {
+    m_gyro_avarage = gyro;
+}
+
 void TAHRSMadgwick::computeAngles()
 {
     float roll  = atan2f(m_q.w*m_q.x + m_q.y*m_q.z, 0.5f - m_q.x*m_q.x - m_q.y*m_q.y); // roll
