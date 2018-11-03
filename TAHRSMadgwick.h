@@ -42,6 +42,10 @@ public:
     inline float getPitch() { return getAngles().y * 57.29578f;}
     inline float getYaw()   { return getAngles().z * 57.29578f;}
 
+    void resetPitchRoll();
+    void setRollPitchByAccelerometer(const TPoint3F& acc);
+    void setYawByMagnetometer(const TPoint3F& mag);
+
 protected:
     void computeAngles();
 };

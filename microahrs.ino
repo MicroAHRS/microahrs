@@ -1,6 +1,6 @@
-#include "TApplicationArduino.h"
+#include "TApplication.h"
 
-TApplicationArduino app;
+TApplication app;
 
 void setup() {
     app.setup();

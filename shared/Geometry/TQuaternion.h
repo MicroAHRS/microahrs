@@ -82,6 +82,24 @@ public:
         //p *= getInvert();
         //return TVector3<T>( p.x, p.y, p.z );
     }
+
+    static TQuaternion<T> CreateFormAngles(double pitch, double roll, double yaw)
+    {
+        // Abbreviations for the various angular functions
+        T cy = cos(yaw * 0.5);
+        T sy = sin(yaw * 0.5);
+        T cr = cos(roll * 0.5);
+        T sr = sin(roll * 0.5);
+        T cp = cos(pitch * 0.5);
+        T sp = sin(pitch * 0.5);
+
+        TQuaternion<T> q;
+        q.w = cy * cr * cp + sy * sr * sp;
+        q.x = cy * sr * cp - sy * cr * sp;
+        q.y = cy * cr * sp + sy * sr * cp;
+        q.z = sy * cr * cp - cy * sr * sp;
+        return q;
+    }
 };
 
 

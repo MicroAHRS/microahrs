@@ -1,6 +1,7 @@
-#ifndef TVECTOR3_H
-#define TVECTOR3_H
+#ifndef TPOINT3_H
+#define TPOINT3_H
 
+#include <math.h>
 
 template<class T>
 class TPoint3
@@ -49,4 +50,4 @@ public:
 
 
 
-#endif // TVECTOR_H
+#endif // TPOINT3_H

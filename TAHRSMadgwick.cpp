@@ -208,11 +208,36 @@ void TAHRSMadgwick::update(TPoint3F gyro, TPoint3F acc, TPoint3F mag, float dt)
 
 //-------------------------------------------------------------------------------------------
 
+void TAHRSMadgwick::setRollPitchByAccelerometer(const TPoint3F& /*acc*/) {
+
+}
+void TAHRSMadgwick::setYawByMagnetometer(const TPoint3F& mag) {
+//    removeMagneticVertical(m_q, mag);
+//    if(mag.isZero())
+//        return;
+    float yaw = atan2(-mag.y, mag.x);
+
+    m_q = TQuaternionF::CreateFormAngles(0,0,yaw);
+}
+
 void TAHRSMadgwick::computeAngles()
 {
     float roll  = atan2f(m_q.w*m_q.x + m_q.y*m_q.z, 0.5f - m_q.x*m_q.x - m_q.y*m_q.y); // roll
     float pitch = asinf(-2.0f * (m_q.x*m_q.z - m_q.w*m_q.y));
     float yaw   = atan2f(m_q.x*m_q.y + m_q.w*m_q.z, 0.5f - m_q.y*m_q.y - m_q.z*m_q.z);
+
+
     m_angles = TPoint3F(roll, pitch, yaw);
     m_angles_computed = true;
+}
+
+void TAHRSMadgwick::resetPitchRoll()
+{
+    float yaw = atan2f(m_q.x*m_q.y + m_q.w*m_q.z, 0.5f - m_q.y*m_q.y - m_q.z*m_q.z);
+    float cy = cos(yaw * 0.5);
+    float sy = sin(yaw * 0.5);
+    m_q.w = cy;
+    m_q.x = 0;
+    m_q.y = 0;
+    m_q.z = sy;
 }

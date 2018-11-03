@@ -5,11 +5,12 @@
 #include <Adafruit_FXOS8700.h>
 #include "shared/Geometry/TPoint3F.h"
 #include "TAHRSMadgwick.h"
+#include "TAppSettings.h"
 
-class TApplicationArduino
+class TApplication
 {
 public:
-    TApplicationArduino();
+    TApplication();
     void setup();
     void loop();
 
@@ -17,7 +18,7 @@ protected:
     bool init();
     void update(float dt);
     void updateAHRS(float dt);
-    void updateDriftCoef(float dt);
+    void updateDriftCoefByTime(float dt);
     void turnLight(bool enabled);
     void printOut();
 
@@ -25,13 +26,18 @@ protected:
     inline TPoint3F getGyro();
     inline TPoint3F getAcc();
 
+    void onCommandResetPitchRoll();
+    void onCommandResetYawByMag();
+    void receiveCmd();
+
 private:
     unsigned long   m_tick_count;
     unsigned long   m_last_update_time;
     bool            m_is_started;
     bool            m_light_enabled;
-    float           m_print_out_timer;
+    unsigned int    m_print_out_timer;
 
+    bool            m_enable_accel_by_angle;
 
     float           m_temperature;
     sensors_event_t gyro_event;
@@ -42,6 +48,7 @@ private:
     TAHRSMadgwick                m_ahrs;
     Adafruit_FXAS21002C_termo    m_device_gyro;
     Adafruit_FXOS8700            m_device_accelmag;
+    TAppSettings                 m_settings;
 };
 
 #endif // TAPPLICATIONARDUINO_H

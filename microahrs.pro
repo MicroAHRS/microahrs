@@ -15,17 +15,20 @@ HEADERS += \
     shared/Geometry/TPoint3F.h \
     shared/Geometry/TPoint3D.h \
     shared/Geometry/TPoint3I.h \
-    TApplicationArduino.h \
     TAppSettings.h \
-    TAHRSMadgwick.h
+    TAHRSMadgwick.h \
+    shared/Geometry/TMatrix3.h \
+    shared/Geometry/TMatrix3F.h \
+    TApplication.h
+
 
 SOURCES += \        
     test/test.cpp \
-    # sensor/Adafruit_FXAS21002C.cpp \
-    # sensor/Adafruit_FXOS8700.cpp \
-    # sensor/Adafruit_FXAS21002C_termo.cpp \
-    # TApplicationArduino.cpp \
-    # TAHRSMadgwick.cpp \
+     sensor/Adafruit_FXAS21002C.cpp \
+     sensor/Adafruit_FXOS8700.cpp \
+     sensor/Adafruit_FXAS21002C_termo.cpp \
+     TAHRSMadgwick.cpp \
+    TApplication.cpp
 
 OTHER_FILES += \
     microahrs.ino
