@@ -19,7 +19,8 @@ HEADERS += \
     TAHRSMadgwick.h \
     shared/Geometry/TMatrix3.h \
     shared/Geometry/TMatrix3F.h \
-    TApplication.h
+    TApplication.h \
+    ECommandCode.h
 
 
 SOURCES += \        

@@ -3,6 +3,8 @@
 
 #include "shared/Geometry/TMatrix3F.h"
 #include "shared/Geometry/TPoint3F.h"
+#include "shared/Function/TFunction3.h"
+#include "shared/Function/TFunctionLineF.h"
 
 class TAppSettings
 {
@@ -19,9 +21,9 @@ public:
               TPoint3F(  0.003, 0.008, 1.082  )
         )
         ,gyro_zero_offset(
-           -22612.24 * 0,
-           -8122.33  * 0,
-           3508.38 * 0
+           0,
+           0,
+           0
         )
       ,gyro_temperature(
            TFunctionLineF(0.02923636286, -2.442451397), // kx kc
@@ -39,16 +41,12 @@ public:
        )
     {
 
-        beta_start = 40;
-        beta       = 0.2;
+        beta_start = 20;
+        beta       = 0.1;
 
-        zeta_start = 0.05;
-        zeta       = 0.005 ;
+        zeta_start = 0;
+        zeta       = 0.01;
 
-
-        beta_init_time_ms  = 3000;
-        zeta_init_time_ms  = 6000;
-        total_init_time_ms = 7000;
 
         print_out_time_ms = 1000 / 20;
         disable_gyro = false;
@@ -60,10 +58,17 @@ public:
             zeta_start = 0;
         }
 
-        acc_max_length = 9.8 * 1.2;
-        acc_min_length = 9.8 * 0.8;
-        pitch_max = 25;
-        roll_max = 15;
+        float gravity_delta    = 9.8 * 0.2;
+        acc_max_length_sq      = 9.8 + gravity_delta;
+        acc_min_length_sq      = 9.8 - gravity_delta;
+        acc_max_length_sq     *= acc_max_length_sq;
+        acc_min_length_sq     *= acc_min_length_sq; // square
+
+        pitch_max = 250;
+        roll_max = 150;
+
+        gravity_vector  = TPoint3F(0,0,1);
+        magnetic_vector = TPoint3F(1,0,0);
     }
 
 
@@ -71,17 +76,14 @@ public:
     float beta_start;
     float zeta;
     float zeta_start;
-    unsigned int total_init_time_ms;
-    unsigned int beta_init_time_ms;
-    unsigned int zeta_init_time_ms;
-    unsigned int print_out_time_ms;   //miliseconds
+    unsigned long print_out_time_ms;   //miliseconds
 
     bool disable_gyro;
     bool disable_acc;
     bool disable_mag;
 
-    float acc_max_length;
-    float acc_min_length;
+    float acc_max_length_sq;
+    float acc_min_length_sq;
 
     float pitch_max;
     float roll_max;
@@ -95,6 +97,10 @@ public:
     // acc colibration
     TPoint3F  acc_zero_offset;
     TPoint3F  acc_scale;
+
+    // default orientation
+    TPoint3F  gravity_vector;
+    TPoint3F  magnetic_vector;
 };
 
 #endif // TAPPSETTINGS_H

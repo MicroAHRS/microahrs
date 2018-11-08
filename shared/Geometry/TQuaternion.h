@@ -83,7 +83,7 @@ public:
         //return TVector3<T>( p.x, p.y, p.z );
     }
 
-    static TQuaternion<T> CreateFormAngles(double pitch, double roll, double yaw)
+    static TQuaternion<T> CreateFormAngles(double roll, double pitch, double yaw)
     {
         // Abbreviations for the various angular functions
         T cy = cos(yaw * 0.5);

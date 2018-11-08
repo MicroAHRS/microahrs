@@ -43,19 +43,23 @@
 //-------------------------------------------------------------------------------------------
 // AHRS algorithm update
 
-TAHRSMadgwick::TAHRSMadgwick() {
+TAHRSMadgwick::TAHRSMadgwick()
+{
     setGyroMeas(gyroMeasError, gyroMeasDrift);
-    m_q = TQuaternionF( 1.0f, 0, 0, 0);
-    m_angles_computed = false;
+    setOrientation(TQuaternionF( 1.0f, 0, 0, 0));
+    //setGravity(   TPoint3F(0   ,0   , 1.0f ));
+    //setMagnitude( TPoint3F(1.0f,0   , 0    ));
+    m_gravity = TPoint3F(0,0,1);
+    m_magnitude = TPoint3F(1,0,0);
 }
 
 void TAHRSMadgwick::setGyroMeas(float error, float drift)
 {
-    beta = sqrt(3.0f / 4.0f) * (M_PI * (error / 180.0f));
-    zeta = sqrt(3.0f / 4.0f) * (M_PI * (drift / 180.0f));
+    beta = sqrt(3.0f / 4.0f) * error * CONVERT_DPS_TO_RAD;
+    zeta = sqrt(3.0f / 4.0f) * drift * CONVERT_DPS_TO_RAD;
 
-    beta  = Clamp(beta , 0.0f, 1.0f);
-    zeta  = Clamp(zeta , 0.0f, 1.0f);
+//    beta  = Clamp(beta , 0.0f, 10.0f);
+//    zeta  = Clamp(zeta , 0.0f, 10.0f);
 }
 
 static inline TPoint3F compensateMagneticDistortion(
@@ -99,7 +103,7 @@ static inline TQuaternionF orientationChangeFromGyro(
 
 static TQuaternionF addGradientDescentStep(
     const TQuaternionF& q,     // текущая ориентация
-    const TPoint3F& dest,     // вектор в системе Земли целевой - длинна 2
+    const TPoint3F& dest,     // вектор в системе Земли целевой - длинна 1
     const TPoint3F& source    // вектор в локальной систее - длинна 1
         )
 {    
@@ -148,22 +152,21 @@ static inline void compensateGyroDrift(
     if(zeta == 0)
         return;
     TPoint3F err = (q * s).toVector3() * 2.0f;
-    gyro_err +=  err * dt * zeta;
+    gyro_err +=  err * dt * zeta;    
 }
 
 
-inline TQuaternionF CorrectiveStepAccel(const TQuaternionF& q,TPoint3F acc)
+inline TQuaternionF CorrectiveStepAccel(const TQuaternionF& q, TPoint3F& acc,const TPoint3F& bearing)
 {
     if(acc.isZero())
         return TQuaternionF();
 
-    acc.normalize();
-    const TPoint3F earth_gravity(0.0f, 0.0f, 1.0f);
-    return addGradientDescentStep(q, earth_gravity, acc);
+    acc.normalize();    
+    return addGradientDescentStep(q, bearing, acc);
 }
 
 
-inline TQuaternionF CorrectiveStepMag(const TQuaternionF& q,TPoint3F mag, bool yaw_only)
+inline TQuaternionF CorrectiveStepMag(const TQuaternionF& q, TPoint3F& mag,const TPoint3F& bearing, bool yaw_only)
 {
     if(mag.isZero())
         return TQuaternionF();
@@ -176,7 +179,7 @@ inline TQuaternionF CorrectiveStepMag(const TQuaternionF& q,TPoint3F mag, bool y
         return TQuaternionF();
     mag.normalize();
 
-    TPoint3F mag_dest = (yaw_only) ? TPoint3F(1.0f, 0.0f, 0.0f) : compensateMagneticDistortion(q, mag);
+    TPoint3F mag_dest = (yaw_only) ? bearing : compensateMagneticDistortion(q, mag);
     return addGradientDescentStep(q, mag_dest, mag);
 }
 
@@ -186,44 +189,36 @@ inline TQuaternionF CorrectiveStepMag(const TQuaternionF& q,TPoint3F mag, bool y
 void TAHRSMadgwick::update(TPoint3F gyro, TPoint3F acc, TPoint3F mag, float dt)
 {
     TQuaternionF q_dot;
+    q_dot -= CorrectiveStepAccel(m_q, acc, m_gravity);
+    q_dot -= CorrectiveStepMag(m_q, mag, m_magnitude, true);
 
-    gyro -= m_gyro_avarage;
-    q_dot = orientationChangeFromGyro(m_q, gyro);
-
-    TQuaternionF s;
-    s += CorrectiveStepAccel(m_q, acc);
-    s += CorrectiveStepMag(m_q, mag, true);
-
-    if(!s.isZero()) {
-        s.normalize();
-        q_dot -= s * beta;
-        compensateGyroDrift(m_q, s, dt, zeta, m_gyro_avarage);
+    m_q_dot = q_dot;
+    if(!q_dot.isZero()) {
+        q_dot.normalize();        
+        compensateGyroDrift(m_q, -q_dot, dt, zeta, m_gyro_error);
+        q_dot *= beta;
     }
 
+    gyro -= m_gyro_error;
+    q_dot += orientationChangeFromGyro(m_q, gyro);
+
     // Integrate rate of change of quaternion to yield quaternion
-    m_q += q_dot * dt;
+    changeOrientation(q_dot * dt);   
+}
+
+void TAHRSMadgwick::changeOrientation(const TQuaternionF& delta)
+{
+    m_q += delta;
     m_q.normalize();
     m_angles_computed = false;
 }
 
+void TAHRSMadgwick::setOrientation(const TQuaternionF& value) {
+    m_q = value;
+    m_angles_computed = false;
+}
+
 //-------------------------------------------------------------------------------------------
-
-void TAHRSMadgwick::setRollPitchByAccelerometer(const TPoint3F& /*acc*/) {
-
-}
-void TAHRSMadgwick::setYawByMagnetometer(const TPoint3F& mag) {
-//    removeMagneticVertical(m_q, mag);
-//    if(mag.isZero())
-//        return;
-    float yaw = atan2(-mag.y, mag.x);
-
-    m_q = TQuaternionF::CreateFormAngles(0,0,yaw);
-}
-
-void TAHRSMadgwick::setGyroAvarage(const TPoint3F& gyro) {
-    m_gyro_avarage = gyro;
-}
-
 void TAHRSMadgwick::computeAngles()
 {
     float roll  = atan2f(m_q.w*m_q.x + m_q.y*m_q.z, 0.5f - m_q.x*m_q.x - m_q.y*m_q.y); // roll
@@ -235,13 +230,4 @@ void TAHRSMadgwick::computeAngles()
     m_angles_computed = true;
 }
 
-void TAHRSMadgwick::resetPitchRoll()
-{
-    float yaw = atan2f(m_q.x*m_q.y + m_q.w*m_q.z, 0.5f - m_q.y*m_q.y - m_q.z*m_q.z);
-    float cy = cos(yaw * 0.5);
-    float sy = sin(yaw * 0.5);
-    m_q.w = cy;
-    m_q.x = 0;
-    m_q.y = 0;
-    m_q.z = sy;
-}
+

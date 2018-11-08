@@ -20,6 +20,8 @@
 #include "shared/Geometry/TPoint3F.h"
 #include "shared/Geometry/TQuaternionF.h"
 
+#define CONVERT_RAD_TO_DPS 57.29578f
+#define CONVERT_DPS_TO_RAD 0.017453293f
 //--------------------------------------------------------------------------------------------
 // Variable declaration
 class TAHRSMadgwick{
@@ -28,8 +30,13 @@ public:
     float zeta;
 
     TQuaternionF m_q;
-    TPoint3F     m_gyro_avarage;
-    TPoint3F     m_angles; //(roll,pitch,yaw)
+    TPoint3F     m_gyro_error;
+    TPoint3F     m_angles;      //(roll,pitch,yaw)
+    TPoint3F     m_gravity;     // direction of gravity force destination
+    TPoint3F     m_magnitude;   // direction of magnit destination
+
+    TQuaternionF m_q_dot;
+
     bool         m_angles_computed;
 public:
     TAHRSMadgwick();
@@ -38,16 +45,18 @@ public:
     void update(TPoint3F gyro, TPoint3F acc, TPoint3F mag, float dt);
 
     const TPoint3F& getAngles() { if (!m_angles_computed) {computeAngles();} return m_angles; }
-    inline float getRoll()  { return getAngles().x * 57.29578f;}
-    inline float getPitch() { return getAngles().y * 57.29578f;}
-    inline float getYaw()   { return getAngles().z * 57.29578f;}
+    inline float getRoll()  { return getAngles().x * CONVERT_RAD_TO_DPS;}
+    inline float getPitch() { return getAngles().y * CONVERT_RAD_TO_DPS;}
+    inline float getYaw()   { return getAngles().z * CONVERT_RAD_TO_DPS;}
 
-    void resetPitchRoll();
-    void setRollPitchByAccelerometer(const TPoint3F& acc);
-    void setYawByMagnetometer(const TPoint3F& mag);
-    void setGyroAvarage(const TPoint3F& mag);
+    inline void setGyroError(const TPoint3F& vec) { m_gyro_error = vec;}
+    inline void setGravity(const TPoint3F& vec) { m_gravity = vec; m_gravity.normalize();}
+    inline void setMagnitude(const TPoint3F& vec) { m_magnitude = vec; m_magnitude.normalize();}
+    void setOrientation(const TQuaternionF& value);
 
 protected:
     void computeAngles();
+    void changeOrientation(const TQuaternionF& delta);
+
 };
 #endif

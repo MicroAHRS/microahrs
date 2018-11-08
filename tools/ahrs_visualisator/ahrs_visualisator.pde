@@ -4,11 +4,61 @@ Serial myPort;
 float yaw = 0.0;
 float pitch = 0.0;
 float roll = 0.0;
+
+
+float accx = 0.0;
+float accy = 0.0;
+float accz = 0.0;
+
+float gerrx = 0.0;
+float gerry = 0.0;
+float gerrz = 0.0;
+
 float temp = 0.0;
+
+String last_message = "Hello";
+
+int
+E_CMD_CODE_NONE = 0,
+E_CMD_CODE_RESET_PITCH_ROLL      = 1,  // сбросить крен тангаж
+E_CMD_CODE_SET_YAW_BY_MAG        = 2,  // установить углы по магнетометру
+E_CMD_CODE_SET_PITCH_ROLL_BY_ACC = 3,  // установить углы по акселерометру
+E_CMD_CODE_BOOST_FILTER          = 4,  // установить углы по акселерометру
+
+E_CMD_CODE_SET_GRAVITY_VECTOR  = 10,  // текущее направление силы тяжести принять за 0 (roll pitch)
+E_CMD_CODE_SET_YAW_NORTH       = 11,  // текущее направление на север принять за 0 (yaw)
+
+E_CMD_CODE_CALIBRATE_GYRO      = 20,  //
+
+E_CMD_CODE_DEBUG_ACTION        = 30,  
+E_CMD_CODE_TOGGLE_GYRO         = 31,  
+E_CMD_CODE_TOGGLE_MAG          = 32,  
+E_CMD_CODE_TOGGLE_ACC          = 33,  
+the_end = 0
+;
+
+
+int[] cmd_Array = {
+  //E_CMD_CODE_NONE,  
+  E_CMD_CODE_TOGGLE_MAG,
+  E_CMD_CODE_RESET_PITCH_ROLL,
+  E_CMD_CODE_SET_YAW_BY_MAG,  // установить углы по магнетометру
+  E_CMD_CODE_SET_PITCH_ROLL_BY_ACC,  // установить углы по акселерометру
+  E_CMD_CODE_BOOST_FILTER,  // установить углы по акселерометру
+  
+  E_CMD_CODE_SET_GRAVITY_VECTOR,  // текущее направление силы тяжести принять за 0 (roll pitch)
+  E_CMD_CODE_SET_YAW_NORTH,  // текущее направление на север принять за 0 (yaw)
+  
+  E_CMD_CODE_CALIBRATE_GYRO,  //
+  
+  E_CMD_CODE_DEBUG_ACTION,
+  E_CMD_CODE_TOGGLE_GYRO,   
+  E_CMD_CODE_TOGGLE_ACC
+};
 
 void setup()
 {
-  size(1024, 768, P3D);
+  size(900, 900, P3D);
 
   // if you have only ONE serial port active
   //myPort = new Serial(this, Serial.list()[1], 115200); // if you have only ONE serial port active
@@ -23,12 +73,23 @@ void setup()
   textMode(SHAPE); // set text mode to shape
 }
 
-
-void mouseReleased() {
-  //locked = false;
+void keyPressed() {
+  //println("Key = " + int(key));
+  int keyIndex = -1;
+  if (key >= '0' && key <= '9') 
+    keyIndex = key - '0';  
+  if(key == 45)
+    keyIndex = 10;
+  if(key == 61)
+    keyIndex = 11;
+     
+  if(keyIndex < 0 || keyIndex >= cmd_Array.length)     
+    return;
+   
+  byte cmd_code = byte(cmd_Array[keyIndex]);
+  println( "Send cmd "+cmd_code);
   
-  myPort.write(0x01);
-
+  myPort.write(cmd_code);
 }
 
 void drawObject(float roll, float pitch, float yaw, float x , float y) {
@@ -38,10 +99,10 @@ void drawObject(float roll, float pitch, float yaw, float x , float y) {
   
   float c1 = cos(radians(roll));
   float s1 = sin(radians(roll));
-  float c2 = cos(radians(pitch));
-  float s2 = sin(radians(pitch));
-  float c3 = cos(radians(yaw+90));
-  float s3 = sin(radians(yaw+90));
+  float c2 = cos(radians(-pitch));
+  float s2 = sin(radians(-pitch));
+  float c3 = cos(radians(-yaw+90));
+  float s3 = sin(radians(-yaw+90));
   applyMatrix( c2*c3, s1*s3+c1*c3*s2, c3*s1*s2-c1*s3, 0,
                -s2, c1*c2, c2*s1, 0,
                c2*s3, c1*s2*s3-c3*s1, c1*c3+s1*s2*s3, 0,
@@ -58,10 +119,10 @@ void drawObject2(float roll, float pitch, float yaw, float x , float y) {
   
   float c1 = cos(radians(roll));
   float s1 = sin(radians(roll));
-  float c2 = cos(radians(pitch));
-  float s2 = sin(radians(pitch));
-  float c3 = cos(radians(yaw+90));
-  float s3 = sin(radians(yaw+90));
+  float c2 = cos(radians(-pitch));
+  float s2 = sin(radians(-pitch));
+  float c3 = cos(radians(-yaw+90));
+  float s3 = sin(radians(-yaw+90));
   applyMatrix( c2*c3, s1*s3+c1*c3*s2, c3*s1*s2-c1*s3, 0,
                -s2, c1*c2, c2*s1, 0,
                c2*s3, c1*s2*s3-c3*s1, c1*c3+s1*s2*s3, 0,
@@ -71,32 +132,98 @@ void drawObject2(float roll, float pitch, float yaw, float x , float y) {
   popMatrix(); // end of object   
 }
 
+
+void drawTextIface() {
+    float y = 0;
+    float x = 10;
+    textAlign(LEFT);
+    textSize(32);
+    fill(100, 0, 0);
+    text("roll    " + roll, x, y+=30); 
+    fill(0, 100, 0);
+    text("pitch " + pitch, x, y+=30);
+    fill(0, 0, 100);
+    text("yaw   " + yaw, x, y+=30);
+    
+    textSize(24);
+    fill(100, 0, 0);
+    text("roll err  " + nf(gerrx,1,5), x, y+=30); 
+    fill(0, 100, 0);
+    text("pitch err " + nf(gerry,1,5), x, y+=24);
+    fill(0, 0, 100);
+    text("yaw err   " + nf(gerrz,1,5), x, y+=24);
+    
+    
+    x = width - 200;
+    y = 0;
+    textSize(32);
+    fill(100, 100, 100);
+    text("accx " + accx, x, y+=30); 
+    //fill(0, 100, 0);
+    text("accy " + accy, x, y+=30);
+    //fill(0, 0, 100);
+    text("accz " + accz, x, y+=30);
+    float g= sqrt(accx*accx + accy*accy + accz*accz);
+    float g_angle = degrees(atan2( accy, accz));
+    float overload = g  / 9.8;
+       
+    fill(100, 100, 0);
+    text("g " + nf(g,1,2), x, y+=30);
+    text("a " + int(g_angle), x, y+=30);
+    text("overload " + nf(overload, 1,1), x, y+=30);
+    
+    x = width/2 - 100;
+    y = 0;
+    fill(100, 0, 0);
+    text("temp " + temp, x, y+=30);
+    
+   
+    textSize(14);
+    x = 10;
+    y = height - 300;
+    fill(0, 0, 0, 128);
+    text("1 - E_CMD_CODE_RESET_PITCH_ROLL ", x, y+=14 );
+    text("2 - E_CMD_CODE_SET_YAW_BY_MAG ", x, y+=14 );
+    text("3 - E_CMD_CODE_SET_PITCH_ROLL_BY_ACC ", x, y+=14 );
+    text("4 - E_CMD_CODE_BOOST_FILTER ", x, y+=14 );
+    text("5 - E_CMD_CODE_SET_GRAVITY_VECTOR ", x, y+=14 );
+    text("6 - E_CMD_CODE_SET_YAW_NORTH ", x, y+=14 );
+    text("7 - E_CMD_CODE_CALIBRATE_GYRO ", x, y+=14 );
+    text("8 - E_CMD_CODE_DEBUG_ACTION ", x, y+=14 );
+    text("9 - E_CMD_CODE_TOGGLE_GYRO ", x, y+=14 );
+    text("0 - E_CMD_CODE_TOGGLE_MAG ", x, y+=14 );    
+    text("- - E_CMD_CODE_TOGGLE_ACC ", x, y+=14 );             
+    
+    
+    
+    textSize(24);
+    x = width / 2;
+    y = height - 24;
+    fill(128, 0, 0);
+    textAlign(CENTER);
+    text(last_message, x, y+=14 );
+    
+    
+}
+
 void draw()
 {
-  serialEvent();  // read and parse incoming serial message
-  background(255); // set background to white
-  lights();
-  
-  drawObject2(roll, 0    , 0   , width*0.5 , height*0.5);
-  drawObject (roll, pitch, yaw , width*0.5 , height*0.5);      
-  drawObject (roll, 0    , 0   , width*0.5 , height*0.75);  
-  drawObject (0   , pitch, 0   , width*0.75, height*0.5);
-  drawObject (0   , pitch, 0   , width*0.25, height*0.5);
-  drawObject (0   , 0    , yaw , width*0.5 , height*0.15);         
-          
-  //line(mouseX-66, mouseY, mouseX+66, mouseY);
-  //line(mouseX, mouseY-66, mouseX, mouseY+66);
-  
-
-  // Print values to console
-  print(roll);
-  print("\t");
-  print(pitch);
-  print("\t");
-  print(yaw+90);
-  print("\t");
-  print(temp);
-  println();
+    serialEvent();  // read and parse incoming serial message
+    background(255); // set background to white
+    lights();
+    
+    drawObject2(roll, 0    , 0   , width*0.5 , height*0.5);
+    drawObject (roll, pitch, yaw , width*0.5 , height*0.5);      
+    drawObject (roll, 0    , 0   , width*0.5 , height*0.75);  
+    drawObject (0   , pitch, 0   , width*0.75, height*0.5);
+    drawObject (0   , pitch, 0   , width*0.25, height*0.5);
+    drawObject (0   , 0    , yaw , width*0.5 , height*0.15);         
+            
+    //line(mouseX-66, mouseY, mouseX+66, mouseY);
+    //line(mouseX, mouseY-66, mouseX, mouseY+66);
+    
+    drawTextIface();
+    
 }
 
 void serialEvent()
@@ -105,17 +232,33 @@ void serialEvent()
   String message;
   do {
     message = myPort.readStringUntil(newLine); // read from port until new line
-    if (message != null) {
-      String[] list = split(trim(message), " ");
-      if (list.length >= 4 && list[0].equals("Orientation:")) {
-        yaw = -float(list[1]) ; // convert to float yaw
-        pitch = -float(list[2]); // convert to float pitch
-        roll = float(list[3]); // convert to float roll         
-      }
-      if (list.length >= 5 ) 
-        temp = float(list[4]);              
-    }
-  } while (message != null);
+    if (message == null)
+      break;
+    
+    message = trim(message);
+    String[] list = split(message, " ");
+    if (list.length >= 10 && list[0].equals("Orient:")) {               
+      roll   = float(list[1]); // convert to float roll
+      pitch  = float(list[2]); // convert to float pitch
+      yaw    = float(list[3]) ; // convert to float yaw
+      
+      accx = float(list[5]) ; // convert to float yaw
+      accy = float(list[6]) ; // convert to float yaw
+      accz = float(list[7]) ; // convert to float yaw
+      
+      temp = float(list[9]);
+      
+      gerrx = float(list[11]) / 1000;
+      gerry = float(list[12]) / 1000;
+      gerrz = float(list[13  ]) / 1000;
+      
+      continue;
+    } 
+    
+    if(message.length() > 1)
+      last_message = message; 
+    println(message);      
+  } while (true);
 }
 
 void drawArduino()

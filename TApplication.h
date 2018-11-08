@@ -6,6 +6,7 @@
 #include "shared/Geometry/TPoint3F.h"
 #include "TAHRSMadgwick.h"
 #include "TAppSettings.h"
+#include "ECommandCode.h"
 
 class TApplication
 {
@@ -17,18 +18,30 @@ public:
 protected:
     bool init();
     void update(float dt);
-    void updateAHRS(float dt);
-    void updateDriftCoefByTime(float dt);
+    void updateDevices() ;
+    void updateAHRS(float dt);    
+    void updateDriftCoefByAngles(const TPoint3F& angles, float acc_len_square);
     void turnLight(bool enabled);
-    void printOut();
+    void printOut();    
 
     inline TPoint3F getMagn();
     inline TPoint3F getGyro();
     inline TPoint3F getAcc();
+    inline float getTemperature();
 
     void onCommandResetPitchRoll();
-    void onCommandResetYawByMag();
+    void onCommandSetYawByMag();
+    void onCommandSetPitchRollByAcc();
+    void onCommandBoostFilter();
+    void onCommandCalibrateGyro();
+    void onCommandSetGravityVector();
+    void onCommandSetMagnitudeVector();
+    void onCommandDebugAction();
+
     void receiveCmd();
+
+    void CalibrateGyroStep1(float max_time);
+    void CalibrateGyroStep2(float max_time);
 
 private:
     unsigned long   m_tick_count;
@@ -36,8 +49,6 @@ private:
     bool            m_is_started;
     bool            m_light_enabled;
     unsigned int    m_print_out_timer;
-
-    bool            m_enable_accel_by_angle;
 
     float           m_temperature;
     sensors_event_t gyro_event;
