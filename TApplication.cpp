@@ -53,6 +53,7 @@ bool TApplication::init()
 {
     Serial.begin(115200);
 
+
     // Initialize the sensors.
     if(!m_device_gyro.begin()) {
         Serial.println("Ooops, no gyro detected ... Check your wiring!");
@@ -68,6 +69,8 @@ bool TApplication::init()
 
     pinMode(LED_BUILTIN, OUTPUT);
 
+    Serial.println();
+    Serial.println("AHRS Ver 1.0");
     onCommandLoad();
     //onCommandBoostFilter();
 
@@ -136,6 +139,21 @@ void TApplication::updateDriftCoefByAngles(const TPoint3F &angles, float acc_len
 {
     // if pitch or roll too big
     // set beta to smoler value
+    bool enable = true;
+    if(!InRangeInc(acc_len_square, m_settings.acc_min_length_sq, m_settings.acc_max_length_sq ))
+        enable = false;
+
+    float beta = m_settings.beta;
+    float zeta = m_settings.zeta;
+
+    //if(enable)
+
+
+    if(enable)
+        m_ahrs.setGyroMeas(beta, zeta);
+    else
+        m_ahrs.setGyroMeas(0,0);
+
 
 }
 
@@ -419,6 +437,7 @@ void TApplication::onCommandDebugAction()
 
     //m_ahrs.setGyroError(TPoint3F(0,0,0));
     m_ahrs.setOrientation(TQuaternionF::CreateFormAngles(roll * CONVERT_DPS_TO_RAD, pitch* CONVERT_DPS_TO_RAD, yaw* CONVERT_DPS_TO_RAD));
+    m_ahrs.setGyroError(TPoint3F());
 }
 
 
@@ -432,7 +451,7 @@ void ToggleFlag(bool& flag, const char* name)
 void ChagneCoef(float& coef)
 {
     coef *= 2;
-    if(coef >= 10)
+    if(coef >= 100)
         coef = 0;
     else
     if(coef == 0)

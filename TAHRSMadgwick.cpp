@@ -151,8 +151,17 @@ static inline void compensateGyroDrift(
     // w_err = 2 q x s
     if(zeta == 0)
         return;
-    TPoint3F err = (q * s).toVector3() * 2.0f;
-    gyro_err +=  err * dt * zeta;    
+    //TPoint3F err = (q * s).toVector3() * 2.0f;  не работает - возможно имел ввиду векторное произведение
+    // w_err = 2 q x s
+    TPoint3F err;
+    err.x = q.w * s.x - q.x * s.w -  q.y * s.z + q.z * s.y;
+    err.y = q.w * s.y + q.x * s.z -  q.y * s.w - q.z * s.x;
+    err.z = q.w * s.z - q.x * s.y +  q.y * s.x - q.z * s.w;
+    err *= 2.0f;
+    gyro_err +=  err * dt * zeta;
+
+
+    // если err сонаправлено с (gyr после колибровки)
 }
 
 
@@ -188,7 +197,7 @@ inline TQuaternionF CorrectiveStepMag(const TQuaternionF& q, TPoint3F& mag,const
 
 void TAHRSMadgwick::update(TPoint3F gyro, TPoint3F acc, TPoint3F mag, float dt)
 {
-    TQuaternionF q_dot;
+    TQuaternionF q_dot(0,0,0,0);
     q_dot -= CorrectiveStepAccel(m_q, acc, m_gravity);
     q_dot -= CorrectiveStepMag(m_q, mag, m_magnitude, true);
 
