@@ -36,10 +36,13 @@ protected:
     void onCommandCalibrateGyro();
     void onCommandSetGravityVector();
     void onCommandSetMagnitudeVector();
+    void onCommandLoad();
+    void onCommandSave();
     void onCommandDebugAction();
 
     void receiveCmd();
 
+    void CalibrateGyroCycle(float beta_start, float beta_end, float max_time);
     void CalibrateGyroStep1(float max_time);
     void CalibrateGyroStep2(float max_time);
 

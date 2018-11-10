@@ -41,4 +41,9 @@ inline float GetProgressSection(float progress, float from , float to)
     return Clamp( (progress - from) / len, 0.0f, 1.0f);
 }
 
+inline float Lerp(float progress, float from, float to )
+{
+    return from * (1.0 - progress) + to * progress;
+}
+
 #endif //__GAIJIN_CHIBILIB_IN_RANGE_HEADER_
