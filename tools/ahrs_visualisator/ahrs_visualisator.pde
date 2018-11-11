@@ -14,6 +14,11 @@ float gerrx = 0.0;
 float gerry = 0.0;
 float gerrz = 0.0;
 
+
+float magx = 0.0;
+float magy = 0.0;
+float magz = 0.0;
+
 float temp = 0.0;
 
 float beta = 0;
@@ -28,26 +33,35 @@ float g_angle=0;
 float overload=0;
 
 byte
-    E_CMD_CODE_NONE = 0,
+E_CMD_CODE_NONE = 0,
     E_CMD_CODE_RESET_PITCH_ROLL      = 1,  // сбросить крен тангаж
-    E_CMD_CODE_SET_YAW_BY_MAG        = 2,  //  bad
-    E_CMD_CODE_SET_PITCH_ROLL_BY_ACC = 3,  // bad
-    E_CMD_CODE_BOOST_FILTER          = 4,   
-    E_CMD_CODE_CHANGE_BETA           = 5,  
+    E_CMD_CODE_SET_YAW_BY_MAG        = 2,  // установить углы по магнетометру
+    E_CMD_CODE_SET_PITCH_ROLL_BY_ACC = 3,  // установить углы по акселерометру
+    E_CMD_CODE_BOOST_FILTER          = 4,  // установить углы по акселерометру
+
+    E_CMD_CODE_CHANGE_BETA           = 5,
     E_CMD_CODE_CHANGE_ZETA           = 6,
-    
+
     E_CMD_CODE_SET_GRAVITY_VECTOR  = 10,  // текущее направление силы тяжести принять за 0 (roll pitch)
     E_CMD_CODE_SET_YAW_NORTH       = 11,  // текущее направление на север принять за 0 (yaw)
-    
-    E_CMD_CODE_CALIBRATE_GYRO      = 20,  //
-    
-    E_CMD_CODE_DEBUG_ACTION        = 30,  
-    E_CMD_CODE_TOGGLE_GYRO         = 31,  
-    E_CMD_CODE_TOGGLE_MAG          = 32,  
-    E_CMD_CODE_TOGGLE_ACC          = 33,  
-    
+
+    E_CMD_CODE_CALIBRATE_GYRO       = 20,
+    E_CMD_CODE_SET_MAGNITUDE_OFFSET = 21,
+    E_CMD_CODE_SET_MAGNITUDE_MATRIX = 22,
+
+    E_CMD_CODE_SET_ACC_OFFSET       = 23,
+    E_CMD_CODE_SET_ACC_SCALE        = 24,
+
+    E_CMD_CODE_DEBUG_ACTION         = 30,
+    E_CMD_CODE_TOGGLE_GYRO          = 31,
+    E_CMD_CODE_TOGGLE_MAG           = 32,
+    E_CMD_CODE_TOGGLE_ACC           = 33,
+
+
     E_CMD_CODE_SAVE                = 40,
     E_CMD_CODE_LOAD                = 41,
+    E_CMD_CODE_LOAD_DEFAULT        = 42,
+    E_CMD_CODE_TOGGLE_PRINT_MODE   = 43,
     
     the_end = 0
 ;
@@ -78,25 +92,24 @@ PImage g_yaw_cursor;
 
 void setup()
 {
-  size(900, 900, P3D);
-
-
-  g_cross = loadImage("horizon3.png");
-  //g_cursor = loadImage("cursor.png");  
-  g_cursor = loadImage("FrontPlaneIcon2.png");
-  g_pitch_cursor = loadImage("pitch_indicator.png");
-  g_yaw_cursor = loadImage("yaw_indicator.png");
-  // if you have only ONE serial port active
-  //myPort = new Serial(this, Serial.list()[1], 115200); // if you have only ONE serial port active
-
-  // if you know the serial port name
-  //myPort = new Serial(this, "COM5:", 9600);        // Windows "COM#:"
-  //myPort = new Serial(this, "\\\\.\\COM41", 9600); // Windows, COM10 or higher
-  myPort = new Serial(this, "/dev/ttyUSB0", 115200);   // Linux "/dev/ttyACM#"
-  //myPort = new Serial(this, "/dev/cu.usbmodem1217321", 9600);  // Mac "/dev/cu.usbmodem######"
-
-  textSize(16); // set text size
-  textMode(SHAPE); // set text mode to shape
+    size(900, 900, P3D);
+        
+    g_cross = loadImage("horizon3.png");
+    //g_cursor = loadImage("cursor.png");  
+    g_cursor = loadImage("FrontPlaneIcon2.png");
+    g_pitch_cursor = loadImage("pitch_indicator.png");
+    g_yaw_cursor = loadImage("yaw_indicator.png");
+    // if you have only ONE serial port active
+    //myPort = new Serial(this, Serial.list()[1], 115200); // if you have only ONE serial port active
+    
+    // if you know the serial port name
+    //myPort = new Serial(this, "COM5:", 9600);        // Windows "COM#:"
+    //myPort = new Serial(this, "\\\\.\\COM41", 9600); // Windows, COM10 or higher
+    myPort = new Serial(this, "/dev/ttyUSB0", 115200);   // Linux "/dev/ttyACM#"
+    //myPort = new Serial(this, "/dev/cu.usbmodem1217321", 9600);  // Mac "/dev/cu.usbmodem######"
+    
+    textSize(16); // set text size
+    textMode(SHAPE); // set text mode to shape
 }
 
 
@@ -116,17 +129,23 @@ void drawTextCommand() {
     text("m - E_CMD_CODE_TOGGLE_MAG ", x, y+=h );    
     text("a - E_CMD_CODE_TOGGLE_ACC ", x, y+=h );
     text("d - E_CMD_CODE_DEBUG_ACTION ", x, y+=h );
+    
+    text("s - E_CMD_CODE_SAVE ", x, y+=h );
+    text("l - E_CMD_CODE_LOAD ", x, y+=h );
+    text("r - E_CMD_CODE_LOAD_DEFAULT ", x, y+=h );
+    
+    //text("r - E_CMD_CODE_LOAD_DEFAULT ", x, y+=h );
 }
 
 void keyPressed() {
     println("Key = " + int(key));
   int keyIndex = -1;
-  if (key >= '0' && key <= '9') 
-    keyIndex = key - '0';  
-  if(key == 45)
-    keyIndex = 10;
-  if(key == 61)
-    keyIndex = 11;
+  //if (key >= '0' && key <= '9') 
+  //  keyIndex = key - '0';  
+  //if(key == 45)
+  //  keyIndex = 10;
+  //if(key == 61)
+  //  keyIndex = 11;
     
   byte cmd_code = E_CMD_CODE_NONE;
   if(keyIndex >= 0 && keyIndex < cmd_Array.length) {          
@@ -154,7 +173,26 @@ void keyPressed() {
   if(key == 's' || key == 'S')
     cmd_code = E_CMD_CODE_SAVE;
   if(key == 'l' || key == 'L')
-    cmd_code = E_CMD_CODE_LOAD;  
+    cmd_code = E_CMD_CODE_LOAD;
+  if(key == 'r' || key == 'R')  //recovery
+    cmd_code = E_CMD_CODE_LOAD_DEFAULT;  
+    
+   
+  //if(key == 'k' || key == 'K') {
+  //  cmd_code = E_CMD_CODE_SET_ACC_OFFSET;
+  //  myPort.write(cmd_code);    
+  //  myPort.write("0.00 0.00 0.00");
+  //  //myPort.write("1.00 0.00 0.00 0.00 1.00 0.00 0.00 0.00 1.00");
+  //  return;
+  //}
+  
+  //if(key == 'l' || key == 'L') {
+  //  cmd_code = E_CMD_CODE_SET_ACC_OFFSET;
+  //  myPort.write(cmd_code);
+  //  accz = 0.6124513;
+  //  myPort.write(accx + " " + accy + " "+ accz); 
+  //  return;
+  //}
       
   
   if(cmd_code != E_CMD_CODE_NONE) {
@@ -167,24 +205,52 @@ void keyPressed() {
 
 void drawObject2(float roll, float pitch, float yaw, float x , float y) {
   
-  pushMatrix(); // begin object
-  translate(x, y);
-  
-  float c1 = cos(radians(roll));
-  float s1 = sin(radians(roll));
-  float c2 = cos(radians(pitch * 0));
-  float s2 = sin(radians(pitch * 0));
-  float c3 = cos(radians(90));
-  float s3 = sin(radians(90));
-  applyMatrix( c2*c3, s1*s3+c1*c3*s2, c3*s1*s2-c1*s3, 0,
-               -s2, c1*c2, c2*s1, 0,
-               c2*s3, c1*s2*s3-c3*s1, c1*c3+s1*s2*s3, 0,
-               0, 0, 0, 1);
-  translate(0,pitch * 10);
-
-  
-  drawHorisont();  
-  popMatrix(); // end of object 
+    pushMatrix(); // begin object
+    translate(x, y, -100);
+    
+    //float c1 = cos(radians(roll));
+    //float s1 = sin(radians(roll));
+    //float c2 = cos(radians(pitch * 0));
+    //float s2 = sin(radians(pitch * 0));
+    //float c3 = cos(radians(90));
+    //float s3 = sin(radians(90));
+    //applyMatrix( c2*c3, s1*s3+c1*c3*s2, c3*s1*s2-c1*s3, 0,
+    //             -s2, c1*c2, c2*s1, 0,
+    //             c2*s3, c1*s2*s3-c3*s1, c1*c3+s1*s2*s3, 0,
+    //             0, 0, 0, 1);
+    
+    rotate(radians(-roll));
+                 
+    float pixels_per_degree = 10;
+    translate(0,pitch * pixels_per_degree);
+    
+    
+    pushMatrix(); // begin object
+    stroke(0);
+    fill(0, 0, 0); // ground       
+    box(2400 * 2, 1,2);
+        
+    fill(128, 255, 128); // ground
+    translate(0, 600 * 2); // set position to edge of Arduino box
+    box(2400 * 2, 1200 * 2,1);
+    popMatrix(); // end of object
+       
+    translate(0, 0, 10); 
+    noStroke(); 
+    fill(0, 0, 0); 
+    float h = 100;
+    float angle_step = 10;    
+    for(int ya = -360; ya <= +360 + 360 ; ya += angle_step) {
+      float lx = (-yaw + ya) * pixels_per_degree;      
+      h=(ya % 45 == 0) ? 100 : 50;      
+      float w=(ya % 45 == 0) ? 2 : 1;
+      pushMatrix();
+      translate(lx, 0, 10); 
+      //line(0, -h, 0, +h);
+      box(w, h*2, 1);
+      popMatrix(); 
+    }
+    popMatrix(); // end of object 
 }
 
 
@@ -215,6 +281,13 @@ void drawTextIface() {
     x = width - 200;
     y = 0;
     textSize(32);
+    fill(100, 100, 100);
+    text("magx " + magx, x, y+=30); 
+    //fill(0, 100, 0);
+    text("magy " + magy, x, y+=30);
+    //fill(0, 0, 100);
+    text("magz " + magz, x, y+=30);
+    
     fill(100, 100, 100);
     text("accx " + accx, x, y+=30); 
     //fill(0, 100, 0);
@@ -269,14 +342,12 @@ void drawCursor(float x, float y,float angle, PImage img, boolean flip) {
   text(nf(angle,3,2), x, y+= (d/2 + 32));         
 }
 
-void drawGravityIndicator(float x, float y, float angle) 
+void drawGravityIndicator(float x, float y, float angle,float d) 
 {
   pushMatrix(); // begin object
   translate(x, y);
   rotate(radians(angle));
-  translate(0, y * 0.95f);
-  fill(100, 200,200);  
-  float d = 20;
+  translate(0, y * 0.95f);     
   ellipseMode(CENTER);
   ellipse(0, 0, d, d);   
   popMatrix(); // end of object            
@@ -291,18 +362,20 @@ void draw()
     if(last_message_timer > 0) 
       last_message_timer -= 0.1;
     
-    drawObject2(roll, pitch    , 0   , width*0.5 , height*0.5);
+    drawObject2(roll, pitch    , yaw   , width*0.5 , height*0.5);
+    stroke(0);
     
     drawCursor(width*0.5 , height*0.75,roll, g_cursor, false);
     drawCursor(width*0.80 , height*0.75,pitch, g_pitch_cursor, roll > 90 || roll < - 90);  
     drawCursor(width*0.20 , height*0.75,yaw, g_yaw_cursor, false);
     
     image(g_cross,width*0.5 -g_cross.width /2 ,height*0.5 -g_cross.height * 0);
-    drawGravityIndicator(width*0.5 , height*0.5, -g_angle);
+    fill(200, 200,200);
+    drawGravityIndicator(width*0.5 , height*0.5, 0, 40);
+    fill(100, 200,200);
+    drawGravityIndicator(width*0.5 , height*0.5, -g_angle, 20);
                  
-                     
-                                                                                              
-          
+                                                                                                                              
     //line(mouseX-66, mouseY, mouseX+66, mouseY);
     //line(mouseX, mouseY-66, mouseX, mouseY+66);
     
@@ -326,9 +399,9 @@ void serialEvent()
       pitch  = float(list[2]); // convert to float pitch
       yaw    = -float(list[3]) ; // convert to float yaw
       
-      accx = float(list[5]) ; // convert to float yaw
-      accy = float(list[6]) ; // convert to float yaw
-      accz = float(list[7]) ; // convert to float yaw
+      accx = float(list[5]) ; 
+      accy = float(list[6]) ; 
+      accz = float(list[7]) ; 
       
       temp = float(list[9]);
       
@@ -339,6 +412,12 @@ void serialEvent()
       beta = float(list[14]) / 1000;
       zeta = float(list[15]) / 1000;
       
+      if (list.length > 19) {
+        magx = float(list[17]) ; 
+        magy = float(list[18]) ; 
+        magz = float(list[19]) ;
+      }
+      
       if(yaw <0)
         yaw += 360;
         
@@ -348,18 +427,10 @@ void serialEvent()
       continue;
     } 
     
-    if(message.length() > 1) {
+    if(message.length() > 0  ) {
       last_message = message;
       last_message_timer = last_message_time_max;
     }
     println(message);      
   } while (true);
-}
-
-void drawHorisont()
-{       
-    stroke(0, 90, 90); // set outline colour to darker teal
-    fill(128, 255, 128); // ground
-    translate(-100, 600 * 2, 0); // set position to edge of Arduino box
-    box(1, 1200 * 2, 2400 * 2); 
 }

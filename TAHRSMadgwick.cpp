@@ -36,7 +36,8 @@
 
 #define gyroMeasError 10   // gyroscope measurement error in rad/s (shown as 5 deg/s)
 #define gyroMeasDrift 0.5f // gyroscope measurement error in rad/s/s (shown as 0.2f deg/s/s)
-
+#define GRAVITY_VECTOR TPoint3F(0,0,1)
+#define MAGNITUDE_VECTOR TPoint3F(1,0,0)
 //============================================================================================
 // Functions
 
@@ -46,11 +47,9 @@
 TAHRSMadgwick::TAHRSMadgwick()
 {
     setGyroMeas(gyroMeasError, gyroMeasDrift);
-    setOrientation(TQuaternionF( 1.0f, 0, 0, 0));
-    //setGravity(   TPoint3F(0   ,0   , 1.0f ));
-    //setMagnitude( TPoint3F(1.0f,0   , 0    ));
-    m_gravity = TPoint3F(0,0,1);
-    m_magnitude = TPoint3F(1,0,0);
+    setOrientation(TQuaternionF( 1.0f, 0, 0, 0));    
+//    m_gravity = TPoint3F(0,0,1);
+//    m_magnitude = TPoint3F(1,0,0);
 }
 
 void TAHRSMadgwick::setGyroMeas(float error, float drift)
@@ -141,27 +140,43 @@ static TQuaternionF addGradientDescentStep(
 }
 
 
+static inline bool SameSign(const float& x, const float& y) {
+    return (x >= 0) ^ (y < 0);
+}
+
 static inline void compensateGyroDrift(
         const TQuaternionF& q,     // текущая ориентация
-        const TQuaternionF& s,        // поправка кватрениона
+        const TQuaternionF& s,     // поправка кватрениона c отрицательным знаком
+        const TPoint3F& gyro,      // gyro angular speed after compensation
         float dt,
-        float zeta,
-        TPoint3F& gyro_err)
+        float zeta,        
+        TPoint3F& gyro_err    // gyro offset
+        )
 {   
     // w_err = 2 q x s
     if(zeta == 0)
         return;
+
     //TPoint3F err = (q * s).toVector3() * 2.0f;  не работает - возможно имел ввиду векторное произведение
     // w_err = 2 q x s
     TPoint3F err;
     err.x = q.w * s.x - q.x * s.w -  q.y * s.z + q.z * s.y;
     err.y = q.w * s.y + q.x * s.z -  q.y * s.w - q.z * s.x;
     err.z = q.w * s.z - q.x * s.y +  q.y * s.x - q.z * s.w;
-    err *= 2.0f;
+    err *= -2.0f;
+
+    // We only whant to slow down the gyro change
+    // disable correction in case gyro became faster
+
+    if(!SameSign(err.x, gyro.x))
+        err.x = 0;
+    if(!SameSign(err.y, gyro.y))
+        err.y = 0;
+    if(!SameSign(err.z, gyro.z))
+        err.z = 0;
+
+    // add gyro offset
     gyro_err +=  err * dt * zeta;
-
-
-    // если err сонаправлено с (gyr после колибровки)
 }
 
 
@@ -188,8 +203,9 @@ inline TQuaternionF CorrectiveStepMag(const TQuaternionF& q, TPoint3F& mag,const
         return TQuaternionF();
     mag.normalize();
 
-    TPoint3F mag_dest = (yaw_only) ? bearing : compensateMagneticDistortion(q, mag);
-    return addGradientDescentStep(q, mag_dest, mag);
+//    TPoint3F mag_dest = (yaw_only) ? bearing : compensateMagneticDistortion(q, mag);
+//    return addGradientDescentStep(q, mag_dest, mag);
+    return addGradientDescentStep(q, bearing, mag);
 }
 
 
@@ -197,18 +213,18 @@ inline TQuaternionF CorrectiveStepMag(const TQuaternionF& q, TPoint3F& mag,const
 
 void TAHRSMadgwick::update(TPoint3F gyro, TPoint3F acc, TPoint3F mag, float dt)
 {
-    TQuaternionF q_dot(0,0,0,0);
-    q_dot -= CorrectiveStepAccel(m_q, acc, m_gravity);
-    q_dot -= CorrectiveStepMag(m_q, mag, m_magnitude, true);
+    gyro -= m_gyro_error;
 
-    m_q_dot = q_dot;
+    TQuaternionF q_dot(0,0,0,0);
+    q_dot -= CorrectiveStepAccel(m_q, acc, GRAVITY_VECTOR);
+    q_dot -= CorrectiveStepMag(m_q, mag, MAGNITUDE_VECTOR, true);
+
     if(!q_dot.isZero()) {
         q_dot.normalize();        
-        compensateGyroDrift(m_q, -q_dot, dt, zeta, m_gyro_error);
+        compensateGyroDrift(m_q, q_dot, gyro, dt, zeta, m_gyro_error);
         q_dot *= beta;
     }
 
-    gyro -= m_gyro_error;
     q_dot += orientationChangeFromGyro(m_q, gyro);
 
     // Integrate rate of change of quaternion to yield quaternion
@@ -224,6 +240,7 @@ void TAHRSMadgwick::changeOrientation(const TQuaternionF& delta)
 
 void TAHRSMadgwick::setOrientation(const TQuaternionF& value) {
     m_q = value;
+    m_q.normalize();
     m_angles_computed = false;
 }
 

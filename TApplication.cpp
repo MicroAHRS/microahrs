@@ -10,6 +10,7 @@
 #include <Wire.h>
 
 
+#define AHRS_VERSION "1.01"
 
 TApplication::TApplication() :
    m_device_gyro( Adafruit_FXAS21002C_termo(0x0021002C) ),
@@ -49,6 +50,7 @@ void PrintQuaternion(const TQuaternionF& q) {
 }
 
 
+
 bool TApplication::init()
 {
     Serial.begin(115200);
@@ -70,9 +72,18 @@ bool TApplication::init()
     pinMode(LED_BUILTIN, OUTPUT);
 
     Serial.println();
-    Serial.println("AHRS Ver 1.0");
+
     onCommandLoad();
-    //onCommandBoostFilter();
+    if(m_settings.m_save_count == 0)
+        return true;
+
+
+    delay(100);
+    updateDevices();
+    onCommandBoostFilter();
+
+    Serial.print("Welcome! AHRS Ver ");
+    Serial.println(AHRS_VERSION);
 
     return true;
 }
@@ -99,13 +110,12 @@ void TApplication::update(float dt)
     updateDevices();    
     updateAHRS(dt);
 
-    const float PRINT_INTERVAL = m_settings.print_out_time_ms;
-
     m_print_out_timer += dt * 1000;
-    while(m_print_out_timer >= PRINT_INTERVAL ) {
+    while(m_print_out_timer >= PRINTOUT_TIME_MS ) {
         printOut();
+        updateDriftCoefByAngles();
         receiveCmd();
-        m_print_out_timer -= PRINT_INTERVAL;
+        m_print_out_timer -= PRINTOUT_TIME_MS;
     }
 }
 #include "shared/in_range.hpp"
@@ -135,26 +145,23 @@ void TApplication::updateAHRS(float dt) {
     m_ahrs.update(gyr,acc,mag,dt);
 }
 
-void TApplication::updateDriftCoefByAngles(const TPoint3F &angles, float acc_len_square)
+void TApplication::updateDriftCoefByAngles()
 {
+    float acc_len_square = getAcc().lengthSq();
     // if pitch or roll too big
-    // set beta to smoler value
-    bool enable = true;
-    if(!InRangeInc(acc_len_square, m_settings.acc_min_length_sq, m_settings.acc_max_length_sq ))
-        enable = false;
+    // set beta to smoler value    
+    if(!InRangeInc(acc_len_square, m_settings.acc_min_length_sq, m_settings.acc_max_length_sq )) {
+        m_ahrs.setGyroMeas(0,0);
+        return;
+    }
 
     float beta = m_settings.beta;
     float zeta = m_settings.zeta;
 
-    //if(enable)
+    // TPoint3F angles = m_ahrs.getAngles();
+    // TODO change beta zeta by angle
 
-
-    if(enable)
-        m_ahrs.setGyroMeas(beta, zeta);
-    else
-        m_ahrs.setGyroMeas(0,0);
-
-
+    m_ahrs.setGyroMeas(beta, zeta);
 }
 
 void TApplication::turnLight(bool enabled) {
@@ -212,17 +219,18 @@ void TApplication::printOut() {
     Serial.print(m_ahrs.beta * 1000 * CONVERT_RAD_TO_DPS / 0.866025404);
     Serial.print(" ");
     Serial.print(m_ahrs.zeta * 1000 * CONVERT_RAD_TO_DPS / 0.866025404);
-    Serial.print(" ");
+    Serial.print(" ");    
+    if(m_settings.print_mag) {
+        Serial.print("mag: ");
+        TPoint3F mag = getMagn();
+        PrintVector(mag);
+    }
     Serial.println();
 
     //Serial.print("q_dor: ");
     //PrintQuaternion(m_ahrs.m_q_dot * 1000);
 //    Serial.print("zeta: ");
 //    Serial.print((m_ahrs.zeta * CONVERT_RAD_TO_DPS) / sqrt(3.0f / 4.0f) );
-
-
-
-    updateDriftCoefByAngles(angles, acc.lengthSq());
 }
 
 
@@ -251,7 +259,7 @@ void TApplication::onCommandResetPitchRoll() {
 void TApplication::onCommandSetYawByMag() {       
     Serial.println("Set yaw by mag");
     TPoint3F angles = m_ahrs.getAngles();
-    TPoint3F mag =getMagn();
+    TPoint3F mag = getMagn();
     float yaw = atan2(-mag.y, mag.x);
     m_ahrs.setOrientation(TQuaternionF::CreateFormAngles(angles.x,angles.y,yaw));
 }
@@ -261,32 +269,17 @@ void TApplication::onCommandSetPitchRollByAcc() {
 }
 
 void TApplication::onCommandSetGravityVector() {
-    //Serial.println("Set gravity vector");
-    //m_ahrs.setGravity(getAcc());
-    //onCommandBoostFilter();
-    m_ahrs.beta *= 2;
-    m_ahrs.zeta = m_ahrs.beta * 0.1;
-
-    Serial.println("Beta increased");
-
+    //TODO
 }
 
 void TApplication::onCommandSetMagnitudeVector() {
-    Serial.println("Set magnitude vector");
-    TPoint3F magn = getMagn();
-    magn.z = 0;
-    m_ahrs.setMagnitude(magn);
-    onCommandBoostFilter();
+    //TODO
 }
 
 void TApplication::onCommandCalibrateGyro()
 {
     TQuaternionF q = m_ahrs.m_q;
     CalibrateGyroStep1(30);
-
-    //Serial.println("Start testing Dont move 30 seconds!");
-    //CalibrateGyroStep2(30);
-    //Serial.println("Done.");
 
     m_ahrs.setOrientation(q);
     m_ahrs.setGyroError(m_settings.gyro_zero_offset);
@@ -301,6 +294,7 @@ void TApplication::CalibrateGyroCycle(float beta_start, float beta_end, float ma
     float MIN_DT = 0.01;
     float dt = 0;
     unsigned long last_time = 0;
+    float last_print_time = 0;
 
     while(time < max_time) {
         delay(1);
@@ -309,6 +303,10 @@ void TApplication::CalibrateGyroCycle(float beta_start, float beta_end, float ma
         if(dt == 0)
             continue;
         time += dt;
+        if(time > 5 && time - last_print_time > 1) {
+            Serial.println(int(max_time - time));
+            last_print_time = time;
+        }
 
         float beta = Lerp(GetProgressSection(time,0,max_time), beta_start, beta_end);
         float zeta = beta * 0.1;
@@ -331,39 +329,61 @@ void TApplication::CalibrateGyroStep1(float max_time)
     Serial.println("Done.");
 }
 
-#include "shared/max.hpp"
-
-#define EARTH_ROTATION_SPEED 0.004166667f
-
-void TApplication::CalibrateGyroStep2(float max_time)
-{    
-    m_ahrs.setOrientation(TQuaternionF(1.0f, 0.0, 0.0, 0.0));
-    CalibrateGyroCycle(0.0, 0.0, max_time);
-
-    TPoint3F angles = m_ahrs.getAngles();
-    float max_angle = Max(Max(fabs(angles.x), fabs(angles.y)), fabs(angles.z));
-
-    float MIN_BETA = EARTH_ROTATION_SPEED * 2; //Earth rotating speed x 2
-    float beta  = (max_angle / max_time) * 5;
-    m_settings.beta = Max( beta, MIN_BETA);
-    m_settings.zeta = m_settings.beta * 0.01;
+void ReadVector(TPoint3F& vec, const char* msg) {
+    float x = Serial.parseFloat();
+    float y = Serial.parseFloat();
+    float z = Serial.parseFloat();
+    vec = TPoint3F(x,y,z);
+    Serial.print(msg);
+    PrintVector(vec);
+    Serial.println();
 }
 
+void TApplication::onCommandSetMagnitudeMatrix() {
+    float* mtx = &m_settings.mag_matrix.x[0][0];
 
+    for(int i=0;i<9 ; i++)
+        mtx[i] = Serial.parseFloat();
+
+    Serial.print("Set magnitude matrix ");
+    for(int i=0;i<9 ; i++) {
+        if(i%3 == 0)
+            Serial.println();
+        Serial.print(mtx[i]);
+        Serial.print(" ");
+    }
+    Serial.println();
+}
+#define BETA_START 100
+#define BETA_END 1
 void TApplication::onCommandBoostFilter() {
     Serial.println("Start boost filter");
-    //ускорить фильтр - чтобы выровнить ориентацию
-    m_ahrs.setGyroMeas(m_settings.beta_start, 0); // zeta - 0 чтобы не портить настройки
+    //ускорить фильтр - чтобы выровнить ориентацию    
     TPoint3F gyr(0,0,0);
     TPoint3F acc = getAcc();
     TPoint3F mag = getMagn();
     float dt = 0.01;
-    for(unsigned long i = 0;i<1000;i++) {
+    unsigned long MAX_I = 500;
+    for(unsigned long i = 0;i < MAX_I;i++) {
+        if(i%10 == 0) {
+            float progress = GetProgressSection(i , 0, MAX_I);
+            float beta = Lerp(progress, BETA_START, BETA_END);
+            m_ahrs.setGyroMeas(beta,0);
+        }
         m_ahrs.update(gyr,acc,mag, dt);
+        if(i%20 == 0)
+            printOut();
     }
 
     m_ahrs.setGyroMeas(m_settings.beta,m_settings.zeta);
     Serial.println("Done");
+}
+
+void TApplication::onSettingsChanged() {
+
+    m_ahrs.setGyroError(m_settings.gyro_zero_offset);
+    m_ahrs.setGyroMeas(m_settings.beta, m_settings.zeta);
+    m_device_gyro.setCalibrateFunction( m_settings.gyro_temperature );
 }
 
 void TApplication::onCommandLoad() {
@@ -374,10 +394,7 @@ void TApplication::onCommandLoad() {
     } else {
         Serial.println("success");
     }
-
-    m_ahrs.setGyroError(m_settings.gyro_zero_offset);
-    m_ahrs.setGyroMeas(m_settings.beta, m_settings.zeta);
-    m_device_gyro.setCalibrateFunction( m_settings.gyro_temperature );
+    onSettingsChanged();
 }
 
 void TApplication::onCommandSave() {
@@ -437,15 +454,17 @@ void TApplication::onCommandDebugAction()
 
     //m_ahrs.setGyroError(TPoint3F(0,0,0));
     m_ahrs.setOrientation(TQuaternionF::CreateFormAngles(roll * CONVERT_DPS_TO_RAD, pitch* CONVERT_DPS_TO_RAD, yaw* CONVERT_DPS_TO_RAD));
-    m_ahrs.setGyroError(TPoint3F());
+    m_ahrs.setGyroError(m_settings.gyro_zero_offset);
 }
 
 
-void ToggleFlag(bool& flag, const char* name)
+#include "shared/max.hpp"
+#define EARTH_ROTATION_SPEED 0.004166667f
+void ToggleFlag(bool& flag, const char* name, bool inverse)
 {
     flag = !flag;
     Serial.print(name);
-    Serial.println(!flag ? " enabled": " disabled");
+    Serial.println(flag ^ inverse ? " enabled": " disabled");
 }
 
 void ChagneCoef(float& coef)
@@ -455,7 +474,7 @@ void ChagneCoef(float& coef)
         coef = 0;
     else
     if(coef == 0)
-        coef = 0.005f;
+        coef = 0.0005f;
 
 }
 
@@ -480,6 +499,19 @@ void TApplication::receiveCmd() {
     case E_CMD_CODE_CALIBRATE_GYRO:
         return onCommandCalibrateGyro();
 
+    case E_CMD_CODE_SET_MAGNITUDE_OFFSET:
+        ReadVector(m_settings.mag_offset, "Set magnitude offset ");
+        break;
+    case E_CMD_CODE_SET_MAGNITUDE_MATRIX:
+        return onCommandSetMagnitudeMatrix();
+
+    case E_CMD_CODE_SET_ACC_OFFSET:
+        ReadVector(m_settings.acc_zero_offset, "Set accel offset ");
+        break;
+    case E_CMD_CODE_SET_ACC_SCALE:
+        ReadVector(m_settings.acc_scale, "Set accel scale ");
+        break;
+
     case E_CMD_CODE_SET_GRAVITY_VECTOR:
         return onCommandSetGravityVector();
 
@@ -489,16 +521,20 @@ void TApplication::receiveCmd() {
     case E_CMD_CODE_DEBUG_ACTION:
         return onCommandDebugAction();
 
+    case E_CMD_CODE_TOGGLE_PRINT_MODE:
+        ToggleFlag(m_settings.print_mag, "Mag print", false);
+        break;
+
     case E_CMD_CODE_TOGGLE_GYRO:
-        ToggleFlag(m_settings.disable_gyro, "Gyro");
+        ToggleFlag(m_settings.disable_gyro, "Gyro", true);
         m_ahrs.setGyroMeas(m_settings.beta, m_settings.disable_gyro? 0 : m_settings.zeta);
         m_ahrs.setGyroError( m_settings.disable_gyro ? TPoint3F(0,0,0) : m_settings.gyro_zero_offset) ;
         break;
     case E_CMD_CODE_TOGGLE_ACC:
-        ToggleFlag(m_settings.disable_acc, "Accel");
+        ToggleFlag(m_settings.disable_acc, "Accel", true);
         break;
     case E_CMD_CODE_TOGGLE_MAG:
-        ToggleFlag(m_settings.disable_mag, "Magnit");
+        ToggleFlag(m_settings.disable_mag, "Magnit", true);
         break;
 
     case E_CMD_CODE_CHANGE_BETA:
@@ -514,6 +550,11 @@ void TApplication::receiveCmd() {
         return onCommandLoad();
     case E_CMD_CODE_SAVE:
         return onCommandSave();
+    case E_CMD_CODE_LOAD_DEFAULT:
+        Serial.println("Load deafult settings. Done.");
+        m_settings.initDefault();
+        onSettingsChanged();
+        break;
     default:
         Serial.println("Unknown command!");
     }

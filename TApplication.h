@@ -20,7 +20,7 @@ protected:
     void update(float dt);
     void updateDevices() ;
     void updateAHRS(float dt);    
-    void updateDriftCoefByAngles(const TPoint3F& angles, float acc_len_square);
+    void updateDriftCoefByAngles();
     void turnLight(bool enabled);
     void printOut();    
 
@@ -38,13 +38,14 @@ protected:
     void onCommandSetMagnitudeVector();
     void onCommandLoad();
     void onCommandSave();
+    void onCommandSetMagnitudeMatrix();
     void onCommandDebugAction();
 
     void receiveCmd();
 
     void CalibrateGyroCycle(float beta_start, float beta_end, float max_time);
     void CalibrateGyroStep1(float max_time);
-    void CalibrateGyroStep2(float max_time);
+    void onSettingsChanged();
 
 private:
     unsigned long   m_tick_count;

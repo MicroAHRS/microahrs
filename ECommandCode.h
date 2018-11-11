@@ -14,16 +14,23 @@ enum ECommandCode {
     E_CMD_CODE_SET_GRAVITY_VECTOR  = 10,  // текущее направление силы тяжести принять за 0 (roll pitch)
     E_CMD_CODE_SET_YAW_NORTH       = 11,  // текущее направление на север принять за 0 (yaw)
 
-    E_CMD_CODE_CALIBRATE_GYRO      = 20,  //
+    E_CMD_CODE_CALIBRATE_GYRO       = 20,
+    E_CMD_CODE_SET_MAGNITUDE_OFFSET = 21,
+    E_CMD_CODE_SET_MAGNITUDE_MATRIX = 22,
 
-    E_CMD_CODE_DEBUG_ACTION        = 30,  //
-    E_CMD_CODE_TOGGLE_GYRO         = 31,  //
-    E_CMD_CODE_TOGGLE_MAG          = 32,  //
-    E_CMD_CODE_TOGGLE_ACC          = 33,  //
+    E_CMD_CODE_SET_ACC_OFFSET       = 23,
+    E_CMD_CODE_SET_ACC_SCALE        = 24,
+
+    E_CMD_CODE_DEBUG_ACTION         = 30,
+    E_CMD_CODE_TOGGLE_GYRO          = 31,
+    E_CMD_CODE_TOGGLE_MAG           = 32,
+    E_CMD_CODE_TOGGLE_ACC           = 33,
 
 
     E_CMD_CODE_SAVE                = 40,
     E_CMD_CODE_LOAD                = 41,
+    E_CMD_CODE_LOAD_DEFAULT        = 42,
+    E_CMD_CODE_TOGGLE_PRINT_MODE   = 43,
 };
 
 #endif // ECOMMANDCODE_H

@@ -32,10 +32,8 @@ public:
     TQuaternionF m_q;
     TPoint3F     m_gyro_error;
     TPoint3F     m_angles;      //(roll,pitch,yaw)
-    TPoint3F     m_gravity;     // direction of gravity force destination
-    TPoint3F     m_magnitude;   // direction of magnit destination
-
-    TQuaternionF m_q_dot;
+//    TPoint3F     m_gravity;     // direction of gravity force destination
+//    TPoint3F     m_magnitude;   // direction of magnit destination
 
     bool         m_angles_computed;
 public:
@@ -50,8 +48,8 @@ public:
     inline float getYaw()   { return getAngles().z * CONVERT_RAD_TO_DPS;}
 
     inline void setGyroError(const TPoint3F& vec) { m_gyro_error = vec;}
-    inline void setGravity(const TPoint3F& vec) { m_gravity = vec; m_gravity.normalize();}
-    inline void setMagnitude(const TPoint3F& vec) { m_magnitude = vec; m_magnitude.normalize();}
+//    inline void setGravity(const TPoint3F& vec) { m_gravity = vec; m_gravity.normalize();}
+//    inline void setMagnitude(const TPoint3F& vec) { m_magnitude = vec; m_magnitude.normalize();}
     void setOrientation(const TQuaternionF& value);
 
 protected:
