@@ -18,20 +18,26 @@ public:
     TAppSettings() { initDefault();}
     void initDefault() {
 
-        acc_zero_offset = TPoint3F( 0.3253305, -0.3593825, 0.6124513);
-        acc_scale = TPoint3F( 1.01591586, 0.9863349377, 1.017566665 );
+        //acc_zero_offset = TPoint3F( 0.3253305, -0.3593825, 0.6124513);
+        //acc_zero_offset = TPoint3F( 0.3253305, -0.3593825, 0.6124513);
+        //acc_scale = TPoint3F( 1.01591586, 0.9863349377, 1.017566665 );
+        acc_scale = TPoint3F( 1, 1, 1 );
         gyro_temperature = TFunction3< TFunctionLineF , float>(
-                TFunctionLineF(0.02923636286, -2.442451397), // kx kc
-                TFunctionLineF(-0.00153622977, -0.512149624),
-                TFunctionLineF(-0.006581737428, 0.4034881183)
+                //TFunctionLineF(0.02923636286, -2.442451397), // kx kc
+                //TFunctionLineF(-0.00153622977, -0.512149624),
+                //TFunctionLineF(-0.006581737428, 0.4034881183)
+                    TFunctionLineF(), // kx kc
+                    TFunctionLineF(),
+                    TFunctionLineF()
                 );
         gyro_zero_offset = TPoint3F(0, 0, 0 );
         mag_matrix = TMatrix3F(
-                TPoint3F(  0.959, 0.002, 0.003 ),
-                TPoint3F(  0.002, 0.964, 0.008  ),
-                TPoint3F(  0.003, 0.008, 1.082  )
+                TPoint3F(  1, 0, 0 ),
+                TPoint3F(  0, 1, 0 ),
+                TPoint3F(  0, 0, 1 )
         );
-        mag_offset = TPoint3F( 19.07, 16.78 - 0.25, 63.38 - 0.25);
+        //mag_offset = TPoint3F( 19.07, 16.78 - 0.25, 63.38 - 0.25);
+        mag_offset = TPoint3F( 0, 0, 0);
 
         beta       = 0.05;
         zeta       = beta * 0.1;

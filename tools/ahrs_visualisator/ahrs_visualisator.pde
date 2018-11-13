@@ -1,4 +1,4 @@
-import processing.serial.*;
+                import processing.serial.*;
 Serial myPort;
 
 float yaw = 0.0;
@@ -29,11 +29,15 @@ float last_message_timer = 0.0;
 String last_message = "Hello";
 
 float g=0;
-float g_angle=0;
+float g_anlge_roll=0;
+float g_angle_pitch=0;
+float mag_angle_yaw=0;
 float overload=0;
 
+float fps= 0;
+
 byte
-E_CMD_CODE_NONE = 0,
+  E_CMD_CODE_NONE = 0,
     E_CMD_CODE_RESET_PITCH_ROLL      = 1,  // сбросить крен тангаж
     E_CMD_CODE_SET_YAW_BY_MAG        = 2,  // установить углы по магнетометру
     E_CMD_CODE_SET_PITCH_ROLL_BY_ACC = 3,  // установить углы по акселерометру
@@ -44,6 +48,7 @@ E_CMD_CODE_NONE = 0,
 
     E_CMD_CODE_SET_GRAVITY_VECTOR  = 10,  // текущее направление силы тяжести принять за 0 (roll pitch)
     E_CMD_CODE_SET_YAW_NORTH       = 11,  // текущее направление на север принять за 0 (yaw)
+    E_CMD_CODE_DEFAULT_ORIENTATION = 12,  // сбросить модификатор ориентации
 
     E_CMD_CODE_CALIBRATE_GYRO       = 20,
     E_CMD_CODE_SET_MAGNITUDE_OFFSET = 21,
@@ -54,36 +59,18 @@ E_CMD_CODE_NONE = 0,
 
     E_CMD_CODE_DEBUG_ACTION         = 30,
     E_CMD_CODE_TOGGLE_GYRO          = 31,
-    E_CMD_CODE_TOGGLE_MAG           = 32,
-    E_CMD_CODE_TOGGLE_ACC           = 33,
+    E_CMD_CODE_CALIBRATION_STOP     = 32,  // code = space - useful when send calibration
+    E_CMD_CODE_TOGGLE_MAG           = 33,
+    E_CMD_CODE_TOGGLE_ACC           = 34,
 
 
     E_CMD_CODE_SAVE                = 40,
     E_CMD_CODE_LOAD                = 41,
     E_CMD_CODE_LOAD_DEFAULT        = 42,
     E_CMD_CODE_TOGGLE_PRINT_MODE   = 43,
-    
     the_end = 0
 ;
 
-
-int[] cmd_Array = {
-  //E_CMD_CODE_NONE,  
-  E_CMD_CODE_TOGGLE_MAG,
-  E_CMD_CODE_RESET_PITCH_ROLL,
-  E_CMD_CODE_CHANGE_BETA,  
-  E_CMD_CODE_CHANGE_ZETA,  
-  E_CMD_CODE_BOOST_FILTER,  // установить углы по акселерометру
-  
-  E_CMD_CODE_SET_GRAVITY_VECTOR,  // текущее направление силы тяжести принять за 0 (roll pitch)
-  E_CMD_CODE_SET_YAW_NORTH,  // текущее направление на север принять за 0 (yaw)
-  
-  E_CMD_CODE_CALIBRATE_GYRO,  //
-  
-  E_CMD_CODE_DEBUG_ACTION,
-  E_CMD_CODE_TOGGLE_GYRO,   
-  E_CMD_CODE_TOGGLE_ACC
-};
 
 PImage g_cross;
 PImage g_cursor;
@@ -108,6 +95,7 @@ void setup()
     myPort = new Serial(this, "/dev/ttyUSB0", 115200);   // Linux "/dev/ttyACM#"
     //myPort = new Serial(this, "/dev/cu.usbmodem1217321", 9600);  // Mac "/dev/cu.usbmodem######"
     
+    myPort.write(E_CMD_CODE_BOOST_FILTER);
     textSize(16); // set text size
     textMode(SHAPE); // set text mode to shape
 }
@@ -117,41 +105,38 @@ void drawTextCommand() {
     float x = width/2 - 150;
     float y = 60;
     float h= 14;
-    textSize(h = 18);
+    textSize(h = 14);
     fill(0, 0, 0);
     
-    text("q - E_CMD_CODE_RESET_PITCH_ROLL ", x, y+=h );
-    text("c - E_CMD_CODE_CALIBRATE_GYRO ", x, y+=h );         
-    text("b - E_CMD_CODE_CHANGE_BETA ", x, y+=h );
-    text("z - E_CMD_CODE_CHANGE_ZETA ", x, y+=h );
-    text("f - E_CMD_CODE_BOOST_FILTER ", x, y+=h );       
-    text("g - E_CMD_CODE_TOGGLE_GYRO ", x, y+=h );
-    text("m - E_CMD_CODE_TOGGLE_MAG ", x, y+=h );    
-    text("a - E_CMD_CODE_TOGGLE_ACC ", x, y+=h );
-    text("d - E_CMD_CODE_DEBUG_ACTION ", x, y+=h );
+    text("q - RESET_PITCH_ROLL ", x, y+=h );
+    text("c - CALIBRATE_GYRO ", x, y+=h );         
+    text("b - CHANGE_BETA ", x, y+=h );
+    text("z - CHANGE_ZETA ", x, y+=h );
+    text("f - BOOST_FILTER ", x, y+=h );
+    y+=h/2;
+    text("g - TOGGLE_GYRO ", x, y+=h );
+    text("m - TOGGLE_MAG ", x, y+=h );    
+    text("a - TOGGLE_ACC ", x, y+=h );
+    text("d - DEBUG_ACTION ", x, y+=h );
+    y+=h/2;
+    text("s - SAVE ", x, y+=h );
+    text("l - LOAD ", x, y+=h );
+    text("r - LOAD_DEFAULT ", x, y+=h );
+    y+=h/2;
+    text("p - SET_PITCH_AND_ROLL", x, y+=h );    
+    text("y - SET_YAW ", x, y+=h );
+    text("i - DEFAULT_ORIENTATION ", x, y+=h );
     
-    text("s - E_CMD_CODE_SAVE ", x, y+=h );
-    text("l - E_CMD_CODE_LOAD ", x, y+=h );
-    text("r - E_CMD_CODE_LOAD_DEFAULT ", x, y+=h );
     
     //text("r - E_CMD_CODE_LOAD_DEFAULT ", x, y+=h );
 }
 
 void keyPressed() {
     println("Key = " + int(key));
-  int keyIndex = -1;
-  //if (key >= '0' && key <= '9') 
-  //  keyIndex = key - '0';  
-  //if(key == 45)
-  //  keyIndex = 10;
-  //if(key == 61)
-  //  keyIndex = 11;
+  int keyIndex = -1;  
     
   byte cmd_code = E_CMD_CODE_NONE;
-  if(keyIndex >= 0 && keyIndex < cmd_Array.length) {          
-    cmd_code = byte(cmd_Array[keyIndex]);    
-  }
-  
+   
   if(key == 'd' || key == 'D')  // force
     cmd_code = E_CMD_CODE_DEBUG_ACTION;
   if(key == 'c' || key == 'C')  // force
@@ -176,7 +161,12 @@ void keyPressed() {
     cmd_code = E_CMD_CODE_LOAD;
   if(key == 'r' || key == 'R')  //recovery
     cmd_code = E_CMD_CODE_LOAD_DEFAULT;  
-    
+  if(key == 'y' || key == 'Y')  //yaw
+    cmd_code = E_CMD_CODE_SET_YAW_NORTH;
+  if(key == 'p' || key == 'P')  // pitch
+    cmd_code = E_CMD_CODE_SET_GRAVITY_VECTOR;
+  if(key == 'i' || key == 'I')  // pitch
+    cmd_code = E_CMD_CODE_DEFAULT_ORIENTATION;
    
   //if(key == 'k' || key == 'K') {
   //  cmd_code = E_CMD_CODE_SET_ACC_OFFSET;
@@ -282,29 +272,30 @@ void drawTextIface() {
     y = 0;
     textSize(32);
     fill(100, 100, 100);
-    text("magx " + magx, x, y+=30); 
-    //fill(0, 100, 0);
-    text("magy " + magy, x, y+=30);
-    //fill(0, 0, 100);
-    text("magz " + magz, x, y+=30);
+    //text("magx " + magx, x, y+=30); 
+    ////fill(0, 100, 0);
+    //text("magy " + magy, x, y+=30);
+    ////fill(0, 0, 100);
+    //text("magz " + magz, x, y+=30);
     
-    fill(100, 100, 100);
-    text("accx " + accx, x, y+=30); 
-    //fill(0, 100, 0);
-    text("accy " + accy, x, y+=30);
-    //fill(0, 0, 100);
-    text("accz " + accz, x, y+=30);
+    //fill(100, 100, 100);
+    //text("accx " + accx, x, y+=30); 
+    ////fill(0, 100, 0);
+    //text("accy " + accy, x, y+=30);
+    ////fill(0, 0, 100);
+    //text("accz " + accz, x, y+=30);
     
        
     fill(100, 100, 0);
     text("g " + nf(g,1,2), x, y+=30);
-    text("a " +  nf(g_angle,1,2), x, y+=30);
+    //text("a " +  nf(g_anlge_roll,1,2), x, y+=30);
     text("overload " + nf(overload, 1,1), x, y+=30);
     
     x = width/2 - 100;
     y = 0;
     fill(100, 0, 0);
     text("temp " + temp, x, y+=30);
+    text("fps " + fps, x, y+=30);
     
                
     drawTextCommand();
@@ -321,7 +312,7 @@ void drawTextIface() {
        
 }
 
-void drawCursor(float x, float y,float angle, PImage img, boolean flip) {
+void drawCursor(float x, float y,float angle, PImage img, boolean flip, float anlge_aim, boolean rev) {
   pushMatrix(); // begin object
   translate(x, y);
   rotate(radians(angle));  
@@ -333,8 +324,21 @@ void drawCursor(float x, float y,float angle, PImage img, boolean flip) {
   ellipse(0, 0, d, d);
   if(flip)
      scale(1,-1);
-  image(img, -w2 , -h2);   
+  image(img, -w2 , -h2);  
+  
+  pushMatrix(); // begin aim indicator  
+  rotate(radians(-anlge_aim));
+  translate(0, (rev?-1:1)*250 / 2);
+  fill(128, 255, 128);
+  float d2 = 10;
+  ellipseMode(CENTER);
+  ellipse(0, 0, d2, d2);   
+  popMatrix(); // end of object 
+  
   popMatrix(); // end of object
+  
+  
+ 
    
   textAlign(CENTER);
   textSize(32);
@@ -365,15 +369,15 @@ void draw()
     drawObject2(roll, pitch    , yaw   , width*0.5 , height*0.5);
     stroke(0);
     
-    drawCursor(width*0.5 , height*0.75,roll, g_cursor, false);
-    drawCursor(width*0.80 , height*0.75,pitch, g_pitch_cursor, roll > 90 || roll < - 90);  
-    drawCursor(width*0.20 , height*0.75,yaw, g_yaw_cursor, false);
+    drawCursor(width*0.5 , height*0.75,roll, g_cursor, false, g_anlge_roll, false);
+    drawCursor(width*0.80 , height*0.75,pitch, g_pitch_cursor, roll > 90 || roll < - 90, g_angle_pitch, false);  
+    drawCursor(width*0.20 , height*0.75,yaw, g_yaw_cursor, false,mag_angle_yaw,true);
     
     image(g_cross,width*0.5 -g_cross.width /2 ,height*0.5 -g_cross.height * 0);
     fill(200, 200,200);
     drawGravityIndicator(width*0.5 , height*0.5, 0, 40);
     fill(100, 200,200);
-    drawGravityIndicator(width*0.5 , height*0.5, -g_angle, 20);
+    drawGravityIndicator(width*0.5 , height*0.5, -g_anlge_roll, 20);
                  
                                                                                                                               
     //line(mouseX-66, mouseY, mouseX+66, mouseY);
@@ -381,6 +385,39 @@ void draw()
     
     drawTextIface();
     
+}
+
+Matrix getRollMatrix(float a) 
+{    
+    double[][] d = { 
+        {1,0,0},
+        {0,cos(a),-sin(a)},
+        {0,sin(a), cos(a)}       
+    };
+    return new Matrix(d);
+}
+
+Matrix getPitchMatrix(float a) 
+{    
+    double[][] d = { 
+        {cos(a),0,sin(a)},
+        {0,1,0},
+        {-sin(a),0, cos(a)}       
+    };
+    return new Matrix(d);
+}
+
+
+void RotateMag() {
+    double[][] d = {{magx,magy,magz}};
+    Matrix mag_m = new Matrix(d);
+    
+    //Matrix m = getPitchMatrix(radians(pitch)).times(getRollMatrix(radians(roll)));
+    Matrix m = getRollMatrix(radians(-roll)).times(getPitchMatrix(radians(pitch)));
+    Matrix r = mag_m.times(m);
+    magx = (float)r.data[0][0];
+    magy = (float)r.data[0][1];
+    magz = (float)r.data[0][2];         
 }
 
 void serialEvent()
@@ -395,8 +432,8 @@ void serialEvent()
     message = trim(message);
     String[] list = split(message, " ");
     if (list.length > 15 && list[0].equals("Orient:")) {               
-      roll   = -float(list[1]); // convert to float roll
-      pitch  = float(list[2]); // convert to float pitch
+      roll   = float(list[1]); // convert to float roll
+      pitch  = -float(list[2]); // convert to float pitch
       yaw    = -float(list[3]) ; // convert to float yaw
       
       accx = float(list[5]) ; 
@@ -418,11 +455,24 @@ void serialEvent()
         magz = float(list[19]) ;
       }
       
+      if(list.length > 21) 
+        fps = float(list[21]) ;     
+      
       if(yaw <0)
         yaw += 360;
         
       g= sqrt(accx*accx + accy*accy + accz*accz);
-      g_angle = -degrees(atan2( accy, accz));
+      g_anlge_roll = degrees(atan2( accy, accz));
+      g_angle_pitch = degrees(atan2( accx, accz));
+      
+      //rotate mag by roll
+      //rotate mag by pitch
+      
+      RotateMag();
+            
+      mag_angle_yaw = degrees(atan2( magy, magx));
+      
+      
       overload = g / 9.8;
       continue;
     } 

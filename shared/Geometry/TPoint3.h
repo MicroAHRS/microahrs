@@ -30,7 +30,8 @@ public:
     inline TPoint3<T>& operator *= (const T& f) { x*=f; y*=f; z*=f; return *this; }
     inline TPoint3<T>& operator /= (const T& f) { x/=f; y/=f; z/=f; return *this; }
     inline TPoint3<T>& scale (const TPoint3<T>& p) { x*=p.x; y*=p.y; z*=p.z; return *this; }
-    inline T            cross (const TPoint3<T>& p) const { return x*p.x + y*p.y + z*p.z;}
+    inline T           dot_product (const TPoint3<T>& p) const { return x*p.x + y*p.y + z*p.z;}
+    inline TPoint3<T>& cross_product(const TPoint3<T>& p) const { return TPoint3<T>( y*p.z - z*p.y, z*p.x - x*p.z , x*p.y - y*p.x ) ; }
 
     inline bool isZero() const { return x == 0 || y == 0 || z == 0 ;}
     inline bool hasNan() const {return x!=x || y!=y || z!=z;}

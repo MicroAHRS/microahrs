@@ -5,12 +5,8 @@
 #include <Adafruit_FXOS8700.h>
 
 #include "TAHRSMadgwick.h"
-//#include "shared/in_range.hpp"
 
-#include <Wire.h>
-
-
-#define AHRS_VERSION "1.01"
+#define AHRS_VERSION "1.02"
 
 TApplication::TApplication() :
    m_device_gyro( Adafruit_FXAS21002C_termo(0x0021002C) ),
@@ -20,9 +16,10 @@ TApplication::TApplication() :
     m_temperature = 0;
     m_print_out_timer = 0;
     m_tick_count = 0;
-    m_last_update_time  = 0;
-    m_is_started = false;
-    m_light_enabled = false;    
+    m_last_update_time  = 0;    
+    //m_light_enabled = false;
+    m_seconds_count = 0;
+    m_fps = 0;
 }
 
 inline TPoint3F VectorFromEvent(sensors_vec_t vec ) {
@@ -79,8 +76,8 @@ bool TApplication::init()
 
 
     delay(100);
-    updateDevices();
-    onCommandBoostFilter();
+    //updateDevices();
+    //onCommandBoostFilter();
 
     Serial.print("Welcome! AHRS Ver ");
     Serial.println(AHRS_VERSION);
@@ -158,24 +155,27 @@ void TApplication::updateDriftCoefByAngles()
     float beta = m_settings.beta;
     float zeta = m_settings.zeta;
 
-    // TPoint3F angles = m_ahrs.getAngles();
+    // TPoint3F angles = m_ahrs.getAngles(); // USE modidfed angles
     // TODO change beta zeta by angle
 
     m_ahrs.setGyroMeas(beta, zeta);
+
 }
 
-void TApplication::turnLight(bool enabled) {
-    if(m_light_enabled == enabled)
-        return;
-    digitalWrite(LED_BUILTIN, !enabled?LOW:HIGH);
-    m_light_enabled = enabled;
-}
+//void TApplication::turnLight(bool enabled) {
+//    if(m_light_enabled == enabled)
+//        return;
+//    digitalWrite(LED_BUILTIN, !enabled?LOW:HIGH);
+//    m_light_enabled = enabled;
+//}
 
 
 void TApplication::setup()
 {
     if(!init())
         while(1);
+
+    //m_start_time = millis();
 }
 
 void TApplication::loop()
@@ -187,21 +187,28 @@ void TApplication::loop()
       return;
     }
 
-
-    unsigned long seconds_count = int(ts / 1000);
     m_last_update_time = ts;
 
     if(dt > 1)
        return;
 
+    unsigned long seconds_count = int(ts / 1000);
+    if(m_seconds_count != seconds_count) {
+        m_fps = m_tick_count / 1.0;
+        m_tick_count = 0;
+        m_seconds_count = seconds_count;
+    }
     update(dt);
     m_tick_count++;
-    turnLight(seconds_count % 2 == 0 || !m_is_started);
+    //turnLight(seconds_count % 2 == 0);
 }
 
 
+
 void TApplication::printOut() {
-    TPoint3F angles = m_ahrs.getAngles();
+    TQuaternionF q = m_ahrs.m_q * m_settings.sensor_to_frame_orientation;
+    TPoint3F angles = q.getAngles();
+    //TPoint3F angles = m_ahrs.getAngles();
     Serial.print("Orient: ");
     PrintVector(angles * CONVERT_RAD_TO_DPS);
 
@@ -213,17 +220,20 @@ void TApplication::printOut() {
     Serial.print("t: ");
     Serial.print(int(temp));
 
-    Serial.print(" gerr: ");
-    PrintVector(m_ahrs.m_gyro_error * CONVERT_RAD_TO_DPS * 1000);
-
-    Serial.print(m_ahrs.beta * 1000 * CONVERT_RAD_TO_DPS / 0.866025404);
-    Serial.print(" ");
-    Serial.print(m_ahrs.zeta * 1000 * CONVERT_RAD_TO_DPS / 0.866025404);
-    Serial.print(" ");    
     if(m_settings.print_mag) {
+        Serial.print(" gerr: ");
+        PrintVector(m_ahrs.m_gyro_error * CONVERT_RAD_TO_DPS * 1000);
+
+        Serial.print(m_ahrs.beta * 1000 * CONVERT_RAD_TO_DPS / 0.866025404);
+        Serial.print(" ");
+        Serial.print(m_ahrs.zeta * 1000 * CONVERT_RAD_TO_DPS / 0.866025404);
+        Serial.print(" ");
         Serial.print("mag: ");
         TPoint3F mag = getMagn();
         PrintVector(mag);
+        Serial.print("fps: ");
+        Serial.print(m_fps);
+
     }
     Serial.println();
 
@@ -269,11 +279,15 @@ void TApplication::onCommandSetPitchRollByAcc() {
 }
 
 void TApplication::onCommandSetGravityVector() {
-    //TODO
+
+    TPoint3F angles = (m_ahrs.m_q * m_settings.sensor_to_frame_orientation).getAngles();
+    m_settings.sensor_to_frame_orientation *= TQuaternionF::CreateFormAngles( -angles.x , -angles.y , 0) ;
 }
 
 void TApplication::onCommandSetMagnitudeVector() {
-    //TODO
+
+    TPoint3F angles = (m_ahrs.m_q * m_settings.sensor_to_frame_orientation).getAngles();
+    m_settings.sensor_to_frame_orientation *= TQuaternionF::CreateFormAngles( 0,0,-angles.z) ;
 }
 
 void TApplication::onCommandCalibrateGyro()
@@ -307,6 +321,7 @@ void TApplication::CalibrateGyroCycle(float beta_start, float beta_end, float ma
             Serial.println(int(max_time - time));
             last_print_time = time;
         }
+        printOut();
 
         float beta = Lerp(GetProgressSection(time,0,max_time), beta_start, beta_end);
         float zeta = beta * 0.1;
@@ -328,12 +343,12 @@ void TApplication::CalibrateGyroStep1(float max_time)
 
     Serial.println("Done.");
 }
+#define FLOAT_ACCURENCY 1000000.f
 
 void ReadVector(TPoint3F& vec, const char* msg) {
-    float x = Serial.parseFloat();
-    float y = Serial.parseFloat();
-    float z = Serial.parseFloat();
-    vec = TPoint3F(x,y,z);
+    vec.x = Serial.parseInt() / FLOAT_ACCURENCY;
+    vec.y = Serial.parseInt() / FLOAT_ACCURENCY;
+    vec.z = Serial.parseInt() / FLOAT_ACCURENCY;
     Serial.print(msg);
     PrintVector(vec);
     Serial.println();
@@ -343,7 +358,7 @@ void TApplication::onCommandSetMagnitudeMatrix() {
     float* mtx = &m_settings.mag_matrix.x[0][0];
 
     for(int i=0;i<9 ; i++)
-        mtx[i] = Serial.parseFloat();
+        mtx[i] = Serial.parseInt() / FLOAT_ACCURENCY;
 
     Serial.print("Set magnitude matrix ");
     for(int i=0;i<9 ; i++) {
@@ -359,17 +374,20 @@ void TApplication::onCommandSetMagnitudeMatrix() {
 void TApplication::onCommandBoostFilter() {
     Serial.println("Start boost filter");
     //ускорить фильтр - чтобы выровнить ориентацию    
-    TPoint3F gyr(0,0,0);
-    TPoint3F acc = getAcc();
-    TPoint3F mag = getMagn();
+
     float dt = 0.01;
     unsigned long MAX_I = 500;
     for(unsigned long i = 0;i < MAX_I;i++) {
         if(i%10 == 0) {
             float progress = GetProgressSection(i , 0, MAX_I);
-            float beta = Lerp(progress, BETA_START, BETA_END);
+            float beta = Lerp(progress, BETA_START, BETA_END);       
             m_ahrs.setGyroMeas(beta,0);
         }
+
+        updateDevices();
+        TPoint3F gyr(0,0,0);
+        TPoint3F acc = getAcc();
+        TPoint3F mag = getMagn();
         m_ahrs.update(gyr,acc,mag, dt);
         if(i%20 == 0)
             printOut();
@@ -484,6 +502,9 @@ void TApplication::receiveCmd() {
 
     byte b = Serial.read();
     switch (b) {
+    case E_CMD_CODE_NONE:
+    case E_CMD_CODE_CALIBRATION_STOP:
+        break;
     case E_CMD_CODE_RESET_PITCH_ROLL:
         return onCommandResetPitchRoll();
 
@@ -517,7 +538,9 @@ void TApplication::receiveCmd() {
 
     case E_CMD_CODE_SET_YAW_NORTH:
         return onCommandSetMagnitudeVector();
-
+    case E_CMD_CODE_DEFAULT_ORIENTATION:
+        m_settings.sensor_to_frame_orientation = TQuaternionF(1,0,0,0);
+        break;
     case E_CMD_CODE_DEBUG_ACTION:
         return onCommandDebugAction();
 
@@ -550,11 +573,14 @@ void TApplication::receiveCmd() {
         return onCommandLoad();
     case E_CMD_CODE_SAVE:
         return onCommandSave();
-    case E_CMD_CODE_LOAD_DEFAULT:
+    case E_CMD_CODE_LOAD_DEFAULT: {
         Serial.println("Load deafult settings. Done.");
+        uint16_t save_cnt = m_settings.m_save_count;
         m_settings.initDefault();
+        m_settings.m_save_count = save_cnt;
         onSettingsChanged();
         break;
+    }
     default:
         Serial.println("Unknown command!");
     }

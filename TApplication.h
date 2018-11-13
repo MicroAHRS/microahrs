@@ -21,25 +21,25 @@ protected:
     void updateDevices() ;
     void updateAHRS(float dt);    
     void updateDriftCoefByAngles();
-    void turnLight(bool enabled);
-    void printOut();    
+    //void turnLight(bool enabled);
+    void printOut();
 
     inline TPoint3F getMagn();
     inline TPoint3F getGyro();
     inline TPoint3F getAcc();
     inline float getTemperature();
 
-    void onCommandResetPitchRoll();
-    void onCommandSetYawByMag();
-    void onCommandSetPitchRollByAcc();
+    inline void onCommandResetPitchRoll();
+    inline void onCommandSetYawByMag();
+    inline void onCommandSetPitchRollByAcc();
     void onCommandBoostFilter();
-    void onCommandCalibrateGyro();
-    void onCommandSetGravityVector();
-    void onCommandSetMagnitudeVector();
+    inline void onCommandCalibrateGyro();
+    inline void onCommandSetGravityVector();
+    inline void onCommandSetMagnitudeVector();
     void onCommandLoad();
-    void onCommandSave();
-    void onCommandSetMagnitudeMatrix();
-    void onCommandDebugAction();
+    inline void onCommandSave();
+    inline void onCommandSetMagnitudeMatrix();
+    inline void onCommandDebugAction();
 
     void receiveCmd();
 
@@ -48,10 +48,11 @@ protected:
     void onSettingsChanged();
 
 private:
+    unsigned long   m_fps;
     unsigned long   m_tick_count;
     unsigned long   m_last_update_time;
-    bool            m_is_started;
-    bool            m_light_enabled;
+    unsigned long   m_seconds_count;
+    //bool            m_light_enabled;
     unsigned int    m_print_out_timer;
 
     float           m_temperature;

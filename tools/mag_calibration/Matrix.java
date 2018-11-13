@@ -1,6 +1,6 @@
 final public class Matrix {
-    private final int M;             // number of rows
-    private final int N;             // number of columns
+    public final int M;             // number of rows
+    public final int N;             // number of columns
     public final double[][] data;   // M-by-N array
 
     // create M-by-N matrix of 0's

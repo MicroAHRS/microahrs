@@ -23,8 +23,9 @@ public:
     inline TQuaternion<T> operator + () const { return *this;}
     inline TQuaternion<T> operator - () const { return TQuaternion<T> ( -w , -x, -y, -z);}
 
-    inline TQuaternion<T>& invert() { x = -x; y = -y; z = -z; return *this;}
-    inline TQuaternion<T> getInvert() const { return TQuaternion<T>(w,-x,-y,-z);}
+    inline TQuaternion<T>& conjugate() { x = -x; y = -y; z = -z; return *this;}
+    //inline TQuaternion<T>& invert() { conjugate(); normalize(); return *this;}
+    inline TQuaternion<T> getConjugate() const { return TQuaternion<T>(w,-x,-y,-z);}
     inline bool isZero() const { return w==0 && x==0 && y==0 && z==0;}
 
     inline TQuaternion<T>& operator += ( const TQuaternion<T>& q ) { x += q.x; y += q.y; z += q.z; w += q.w;return *this;}
@@ -32,7 +33,7 @@ public:
     inline TQuaternion<T>& operator *= (const T& f) { w*=f;x*=f; y*=f; z*=f; return *this; }
     inline TQuaternion<T>& operator /= (const T& f) { w/=f;x/=f; y/=f; z/=f; return *this; }
 
-    TQuaternion<T>& operator *= ( const TQuaternion<T>& q ) {
+    TQuaternion<T>& operator *= ( const TQuaternion<T>& q ) {  //Hamilton product
         *this = TQuaternion<T> (
                 w * q.w - x * q.x - y * q.y - z * q.z,
                 w * q.x + x * q.w + y * q.z - z * q.y,
@@ -100,6 +101,13 @@ public:
         q.y = cy * cr * sp + sy * sr * cp;
         q.z = sy * cr * cp - cy * sr * sp;
         return q;
+    }
+
+    TPoint3<T> getAngles() const {
+        T roll  = atan2f(w*x + y*z, 0.5f - x*x - y*y); // roll
+        T pitch = asinf(-2.0f * (x*z - w*y));
+        T yaw   = atan2f(x*y + w*z, 0.5f - y*y - z*z);
+        return TPoint3<T>(roll, pitch, yaw);
     }
 };
 

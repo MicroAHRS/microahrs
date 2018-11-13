@@ -21,7 +21,7 @@
 #endif
 
 #include <Wire.h>
-#include <limits.h>
+//#include <limits.h>
 
 #include "Adafruit_FXOS8700.h"
 

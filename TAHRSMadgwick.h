@@ -30,31 +30,24 @@ public:
     float zeta;
 
     TQuaternionF m_q;
-    TPoint3F     m_gyro_error;
-    TPoint3F     m_angles;      //(roll,pitch,yaw)
-//    TPoint3F     m_gravity;     // direction of gravity force destination
-//    TPoint3F     m_magnitude;   // direction of magnit destination
-
-    bool         m_angles_computed;
+    TPoint3F     m_gyro_error;        
+    TPoint3F     m_angle_dest;
+    float        m_zeta_max_angle;
 public:
     TAHRSMadgwick();
 
+    void setZetaMaxAngle(float value);
     void setGyroMeas(float error, float drift);
     void update(TPoint3F gyro, TPoint3F acc, TPoint3F mag, float dt);
-
-    const TPoint3F& getAngles() { if (!m_angles_computed) {computeAngles();} return m_angles; }
-    inline float getRoll()  { return getAngles().x * CONVERT_RAD_TO_DPS;}
-    inline float getPitch() { return getAngles().y * CONVERT_RAD_TO_DPS;}
-    inline float getYaw()   { return getAngles().z * CONVERT_RAD_TO_DPS;}
-
+    inline TPoint3F getAngles() const { return m_q.getAngles();}
     inline void setGyroError(const TPoint3F& vec) { m_gyro_error = vec;}
-//    inline void setGravity(const TPoint3F& vec) { m_gravity = vec; m_gravity.normalize();}
-//    inline void setMagnitude(const TPoint3F& vec) { m_magnitude = vec; m_magnitude.normalize();}
     void setOrientation(const TQuaternionF& value);
 
-protected:
-    void computeAngles();
-    void changeOrientation(const TQuaternionF& delta);
+protected:        
+    inline void changeOrientation(const TQuaternionF& delta);
+    inline void compensateGyroDrift( const TQuaternionF& s, const TPoint3F& gyro, float dt);
+    inline TQuaternionF correctiveStepAccel(TPoint3F& acc);
+    inline TQuaternionF correctiveStepMag(TPoint3F& mag, bool yaw_only);
 
 };
 #endif

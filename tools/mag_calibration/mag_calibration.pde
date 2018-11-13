@@ -19,8 +19,8 @@ public class Point {
 
 
 
-Matrix m2 = new Matrix(3,3);
-Point mag_offset = new Point();
+Matrix mag_matrix = Matrix.identity(2);
+Point  mag_offset = new Point();
 Point[]  points = new Point[1024];
 Point[]  points_result = new Point[1024];
 int points_count = 0;
@@ -60,7 +60,7 @@ float g=0;
 float g_angle=0;
 float overload=0;
 
-
+float float_factor = 1000000;
 
 byte
 E_CMD_CODE_NONE = 0,
@@ -84,8 +84,9 @@ E_CMD_CODE_NONE = 0,
 
     E_CMD_CODE_DEBUG_ACTION         = 30,
     E_CMD_CODE_TOGGLE_GYRO          = 31,
-    E_CMD_CODE_TOGGLE_MAG           = 32,
-    E_CMD_CODE_TOGGLE_ACC           = 33,
+    E_CMD_CODE_CALIBRATION_STOP     = 32,
+    E_CMD_CODE_TOGGLE_MAG           = 33,
+    E_CMD_CODE_TOGGLE_ACC           = 34,
 
 
     E_CMD_CODE_SAVE                = 40,
@@ -108,28 +109,51 @@ void setup()
     //myPort = new Serial(this, "COM5:", 9600);        // Windows "COM#:"
     //myPort = new Serial(this, "\\\\.\\COM41", 9600); // Windows, COM10 or higher
     myPort = new Serial(this, "/dev/ttyUSB0", 115200);   // Linux "/dev/ttyACM#"
-    //myPort = new Serial(this, "/dev/cu.usbmodem1217321", 9600);  // Mac "/dev/cu.usbmodem######"
-    
+    //myPort = new Serial(this, "/dev/cu.usbmodem1217321", 9600);  // Mac "/dev/cu.usbmodem######"    
     textSize(16); // set text size
     textMode(SHAPE); // set text mode to shape    
 }
 
+Matrix CreateMatrix(double[][] dat) {
+    return  new Matrix(dat);
+}
 
+
+void SendMagOffset(float x , float y, float z) {
+    myPort.write(E_CMD_CODE_SET_MAGNITUDE_OFFSET);            
+    myPort.write(int(x*float_factor)+" "+int(y*float_factor)+" "+int(z*float_factor)+" ");    
+}
+
+
+void SendMagMatrix(Matrix mtx) {
+    myPort.write(E_CMD_CODE_SET_MAGNITUDE_MATRIX);
+    for(int i=0;i<mtx.M;i++) {
+        for(int j=0;j<mtx.N;j++) {
+            myPort.write((int)(mtx.data[i][j]*float_factor)+" ");
+            delay(10);
+        }
+    }        
+}
 
 void keyPressed() {        
   byte cmd_code = E_CMD_CODE_NONE;
   
   //if(key == 'd' || key == 'D')  // force
   //  cmd_code = E_CMD_CODE_DEBUG_ACTION;
-    if(key == 'z' || key == 'Z') {
-        showMessage("Send zero calibration");
-        myPort.write(E_CMD_CODE_SET_MAGNITUDE_OFFSET);            
-        myPort.write("0.00 0.00 0.0");
-        
-        myPort.write(E_CMD_CODE_SET_MAGNITUDE_MATRIX);            
-        myPort.write("1.00 0.00 0.0 ");
-        myPort.write("0.00 1.00 0.0 ");
-        myPort.write("0.00 0.00 1.0");                    
+    if(key == 'z' || key == 'Z') { 
+        showMessage("Send zero calibration");        
+        SendMagOffset(0,0,0);
+        SendMagMatrix(Matrix.identity(3));
+    }
+    
+    if(key == '1') {
+        showMessage("Send sample calibration");
+        SendMagOffset(-72.49,-87.58,66.34);
+        double[][] dat = { {1.001, 0.026, 0.03 },
+            {0.026, 0.999, -0.001},
+            {0.003, 0.001, 1.001}
+        };
+        SendMagMatrix( CreateMatrix( dat ));                                           
     }
   
     if(key == 'r' || key == 'R') {    
@@ -145,6 +169,12 @@ void keyPressed() {
         ProcessData();
         return;
     }    
+    
+    if(key == 'a' || key == 'A') {
+        showMessage("Apply settings");
+        SendSettings();
+        return;
+    }
     
     if(key == 's' || key == 'S')
         cmd_code = E_CMD_CODE_SAVE;
@@ -173,7 +203,18 @@ void ProcessData() {
       
     CopyDataToResult();
     HardIronCalibration();
-    SoftIronCalibration();
+    SoftIronCalibration();          
+}
+
+void SendSettings() {
+    
+    SendMagOffset(mag_offset.x,mag_offset.y,66.34);
+    double[][] d= {
+        {mag_matrix.data[0][0], mag_matrix.data[0][1], 0 },
+        {mag_matrix.data[1][0], mag_matrix.data[1][1], 0},
+        {0, 0, 1}
+    }; 
+    SendMagMatrix(CreateMatrix(d));                      
 }
 
 void HardIronCalibration() {       
@@ -202,13 +243,16 @@ void applyOffsetToData(float x , float y) {
     } 
 }
 
+Point RotateVector(Matrix mtx, Point p) {
+    double[][] ar2 = {{p.x,p.y}};
+    Matrix m_p = new Matrix(ar2);                
+    Matrix m_p2 = m_p.times(mtx);
+    return new Point( (float)m_p2.data[0][0],(float)m_p2.data[0][1]);
+}
+
 void applyMatrixToData(Matrix mtx) {
-    for(int i = 0; i< points_result_count; i++ ) {      
-        double[][] ar2 = {{points_result[i].x,points_result[i].y}};
-        Matrix m_p = new Matrix(ar2);                
-        Matrix m_p2 = m_p.times(mtx);
-        points_result[i].x = (float)m_p2.data[0][0];
-        points_result[i].y = (float)m_p2.data[0][1];
+    for(int i = 0; i< points_result_count; i++ ) { 
+        points_result[i] = RotateVector(mtx, points_result[i]);        
     }
 }
 
@@ -278,12 +322,11 @@ void SoftIronCalibration()
     println( "scale "+ scale );
     
     ///////////////////// rotate back ///////////////
-    
-    double[][] mat_rot2_data = {
+    double[][] d = {
         {cos(-angle) , sin(-angle)},
         {-sin(-angle), cos(-angle)}        
     };
-    Matrix mat_rot2 = new Matrix(mat_rot2_data );   
+    Matrix mat_rot2 = CreateMatrix(d);   
                
     Matrix mat_final = Matrix.identity(2); 
     mat_final = mat_final.times(mat_rot1);
@@ -302,6 +345,7 @@ void SoftIronCalibration()
     applyMatrixToData(scale_mat_2);
     applyMatrixToData(mat_rot2);
     
+    mag_matrix = mat_final;
 }
 
 float scale = 450/60;
@@ -327,8 +371,8 @@ void drawAxis() {
 void drawTextIface() {
     float y = 0;
     float x = 10;
-       
-    x = width - 200;
+    textAlign(LEFT);       
+    x = width - 400;
     y = 0;
     textSize(32);
     fill(100, 100, 100);
@@ -347,6 +391,17 @@ void drawTextIface() {
     //fill(0, 0, 100);
     //text("mag_offset_y  " + magz, x, y+=30);
 
+
+    float h= 18;
+    textSize(h);
+    x = 50;
+    y = 16;
+    text("s - Save ", x, y+=h);
+    text("l - Load ", x, y+=h);
+    text("z - Zero settings ", x, y+=h);
+    text("a - Apply settings ", x, y+=h);
+    text("r - Record start ", x, y+=h);
+    text("f - Finish recording ", x, y+=h);
     
     
     textSize(24);
@@ -377,6 +432,16 @@ void drawData()
     Point p2 = points_result[i];
     line(p1.x * scale, p1.y * scale, p2.x * scale, p2.y * scale);   
   }
+  
+  
+  stroke(128,255,128);
+  Point p2 = new Point(magx, magy); 
+  line(0, 0, p2.x * scale, p2.y * scale);
+  //p = new Point(magx, magy); 
+  p2.x -= mag_offset.x;
+  p2.y -= mag_offset.y;
+  p2 = RotateVector(mag_matrix, p2);
+  line(0, 0, p2.x * scale, p2.y * scale);
   
   
 }

@@ -20,7 +20,8 @@ HEADERS += \
     shared/Geometry/TMatrix3.h \
     shared/Geometry/TMatrix3F.h \
     TApplication.h \
-    ECommandCode.h
+    ECommandCode.h \
+    EPrintModeh
 
 
 SOURCES += \        

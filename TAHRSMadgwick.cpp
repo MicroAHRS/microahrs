@@ -50,6 +50,12 @@ TAHRSMadgwick::TAHRSMadgwick()
     setOrientation(TQuaternionF( 1.0f, 0, 0, 0));    
 //    m_gravity = TPoint3F(0,0,1);
 //    m_magnitude = TPoint3F(1,0,0);
+    setZetaMaxAngle(2);
+}
+
+
+void TAHRSMadgwick::setZetaMaxAngle(float value) {
+    m_zeta_max_angle = cos(value * CONVERT_DPS_TO_RAD);
 }
 
 void TAHRSMadgwick::setGyroMeas(float error, float drift)
@@ -66,7 +72,7 @@ static inline TPoint3F compensateMagneticDistortion(
         const TPoint3F& mag)
 {
     // Reference direction of Earth's magnetic field (See EQ 46)
-    TPoint3F result = q.getInvert().rotateVector(mag);
+    TPoint3F result = q.getConjugate().rotateVector(mag);
     // now we have vector in Earth system
     float zz = result.z * result.z;
     result.y = 0;
@@ -80,7 +86,7 @@ static inline TPoint3F removeMagneticVertical(
         const TPoint3F& mag)
 {
     // now we have vector in Earth ref system
-    TPoint3F result = q.getInvert().rotateVector(mag);
+    TPoint3F result = q.getConjugate().rotateVector(mag);
     // remove vertical component
     result.z = 0;
     // return vector to Device ref system
@@ -98,19 +104,18 @@ static inline TQuaternionF orientationChangeFromGyro(
     return  q * 0.5f * TQuaternionF(gyro);
 }
 
-
-
 static TQuaternionF addGradientDescentStep(
     const TQuaternionF& q,     // текущая ориентация
     const TPoint3F& dest,     // вектор в системе Земли целевой - длинна 1
-    const TPoint3F& source    // вектор в локальной систее - длинна 1
+    const TPoint3F& source,    // вектор в локальной систее - длинна 1
+        TPoint3F& dest_local  // dest vector at local system - for reuse
         )
 {    
     TQuaternionF result;
 
     // Gradient decent algorithm corrective step
     // EQ 15, 21    
-    TPoint3F dest_local = q.rotateVector(dest);
+    dest_local = q.rotateVector(dest);
     TPoint3F delta = dest_local - source;
     TPoint3F d2 = dest*2;
 
@@ -144,15 +149,13 @@ static inline bool SameSign(const float& x, const float& y) {
     return (x >= 0) ^ (y < 0);
 }
 
-static inline void compensateGyroDrift(
-        const TQuaternionF& q,     // текущая ориентация
+inline  void TAHRSMadgwick::compensateGyroDrift(
         const TQuaternionF& s,     // поправка кватрениона c отрицательным знаком
-        const TPoint3F& gyro,      // gyro angular speed after compensation
-        float dt,
-        float zeta,        
-        TPoint3F& gyro_err    // gyro offset
-        )
+        const TPoint3F& gyro,
+        float dt)
 {   
+    TQuaternionF& q = m_q; //just reference
+
     // w_err = 2 q x s
     if(zeta == 0)
         return;
@@ -165,47 +168,74 @@ static inline void compensateGyroDrift(
     err.z = q.w * s.z - q.x * s.y +  q.y * s.x - q.z * s.w;
     err *= -2.0f;
 
-    // We only whant to slow down the gyro change
-    // disable correction in case gyro became faster
 
-    if(!SameSign(err.x, gyro.x))
-        err.x = 0;
-    if(!SameSign(err.y, gyro.y))
-        err.y = 0;
-    if(!SameSign(err.z, gyro.z))
-        err.z = 0;
+    if(SameSign(err.x, gyro.x) && m_angle_dest.x > m_zeta_max_angle)
+        m_gyro_error.x += err.x * dt * zeta;
 
-    // add gyro offset
-    gyro_err +=  err * dt * zeta;
+    if(SameSign(err.y, gyro.y)  && m_angle_dest.y > m_zeta_max_angle)
+        m_gyro_error.y += err.y * dt * zeta;
+
+    if(SameSign(err.z, gyro.z)  && m_angle_dest.z > m_zeta_max_angle)
+        m_gyro_error.z += err.z * dt * zeta;
 }
 
+#define AXIS_X 0
+#define AXIS_Y 1
+#define AXIS_Z 2
 
-inline TQuaternionF CorrectiveStepAccel(const TQuaternionF& q, TPoint3F& acc,const TPoint3F& bearing)
+inline float ComputeVectorAngle(TPoint3F p1, TPoint3F p2, const short a)
 {
+    switch (a) {
+    case AXIS_X:
+        p1.x= p2.x= 0;
+        break;
+    case AXIS_Y:
+        p1.y= p2.y= 0;
+        break;
+    case AXIS_Z:
+        p1.z= p2.z= 0;
+        break;
+    }
+    p1.normalize();
+    p2.normalize();
+    return p1.dot_product(p2);
+}
+
+TQuaternionF TAHRSMadgwick::correctiveStepAccel(TPoint3F& acc)
+{
+    TQuaternionF result;
     if(acc.isZero())
-        return TQuaternionF();
+        return result;
 
-    acc.normalize();    
-    return addGradientDescentStep(q, bearing, acc);
+    acc.normalize();
+    TPoint3F dest_local;
+    result = addGradientDescentStep(m_q, GRAVITY_VECTOR, acc, dest_local);
+    m_angle_dest.x = ComputeVectorAngle(dest_local, acc, AXIS_X);
+    m_angle_dest.y = ComputeVectorAngle(dest_local, acc, AXIS_Y);
+
+    return result;
 }
 
-
-inline TQuaternionF CorrectiveStepMag(const TQuaternionF& q, TPoint3F& mag,const TPoint3F& bearing, bool yaw_only)
+TQuaternionF TAHRSMadgwick::correctiveStepMag(TPoint3F& mag, bool yaw_only)
 {
+    TQuaternionF result;
     if(mag.isZero())
-        return TQuaternionF();
+        return result;
     mag.normalize();
 
     if(yaw_only)
-        mag = removeMagneticVertical(q, mag);
+        mag = removeMagneticVertical(m_q, mag);
 
     if(mag.isZero())
-        return TQuaternionF();
+        return result;
     mag.normalize();
 
 //    TPoint3F mag_dest = (yaw_only) ? bearing : compensateMagneticDistortion(q, mag);
 //    return addGradientDescentStep(q, mag_dest, mag);
-    return addGradientDescentStep(q, bearing, mag);
+    TPoint3F dest_local;
+    result = addGradientDescentStep(m_q, MAGNITUDE_VECTOR, mag, dest_local);
+    m_angle_dest.z = ComputeVectorAngle(dest_local, mag, AXIS_Z);
+    return result;
 }
 
 
@@ -216,44 +246,27 @@ void TAHRSMadgwick::update(TPoint3F gyro, TPoint3F acc, TPoint3F mag, float dt)
     gyro -= m_gyro_error;
 
     TQuaternionF q_dot(0,0,0,0);
-    q_dot -= CorrectiveStepAccel(m_q, acc, GRAVITY_VECTOR);
-    q_dot -= CorrectiveStepMag(m_q, mag, MAGNITUDE_VECTOR, true);
+    q_dot -= correctiveStepAccel(acc);
+    q_dot -= correctiveStepMag(mag, true);
 
     if(!q_dot.isZero()) {
-        q_dot.normalize();        
-        compensateGyroDrift(m_q, q_dot, gyro, dt, zeta, m_gyro_error);
+        q_dot.normalize();
+        compensateGyroDrift(q_dot, gyro, dt);
         q_dot *= beta;
     }
 
     q_dot += orientationChangeFromGyro(m_q, gyro);
-
     // Integrate rate of change of quaternion to yield quaternion
-    changeOrientation(q_dot * dt);   
+    changeOrientation(q_dot * dt);       
 }
 
-void TAHRSMadgwick::changeOrientation(const TQuaternionF& delta)
+inline void TAHRSMadgwick::changeOrientation(const TQuaternionF& delta)
 {
     m_q += delta;
-    m_q.normalize();
-    m_angles_computed = false;
+    m_q.normalize();    
 }
 
 void TAHRSMadgwick::setOrientation(const TQuaternionF& value) {
     m_q = value;
     m_q.normalize();
-    m_angles_computed = false;
 }
-
-//-------------------------------------------------------------------------------------------
-void TAHRSMadgwick::computeAngles()
-{
-    float roll  = atan2f(m_q.w*m_q.x + m_q.y*m_q.z, 0.5f - m_q.x*m_q.x - m_q.y*m_q.y); // roll
-    float pitch = asinf(-2.0f * (m_q.x*m_q.z - m_q.w*m_q.y));
-    float yaw   = atan2f(m_q.x*m_q.y + m_q.w*m_q.z, 0.5f - m_q.y*m_q.y - m_q.z*m_q.z);
-
-
-    m_angles = TPoint3F(roll, pitch, yaw);
-    m_angles_computed = true;
-}
-
-
