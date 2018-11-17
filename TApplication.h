@@ -47,13 +47,14 @@ protected:
     inline void onCommandSetMagnitudeMatrix();
     inline void onCommandDebugAction();
     inline void onChangeGyroRange();
+    inline void onChangeAccRange();
 
     void receiveCmd();
 
     void CalibrateGyroCycle(float beta_start, float beta_end, float max_time);
     void CalibrateGyroStep1(float max_time);
     void onSettingsChanged();
-    void onChangeAccRange();
+
 
 private:
     unsigned long   m_fps;

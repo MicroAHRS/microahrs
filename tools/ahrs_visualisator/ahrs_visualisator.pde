@@ -123,7 +123,8 @@ void drawTextCommand() {
     text("g - TOGGLE_GYRO ", x, y+=h );
     text("m - TOGGLE_MAG ", x, y+=h );    
     text("a - TOGGLE_ACC ", x, y+=h );
-    text("d - DEBUG_ACTION ", x, y+=h );
+    text("w - DEBUG_ACTION ", x, y+=h );
+    text("v - VERBOSE OUTPUT ", x, y+=h );
     y+=h/2;
 
     x = width/2 + 50;
@@ -131,13 +132,13 @@ void drawTextCommand() {
 
     text("s - SAVE ", x, y+=h );
     text("l - LOAD ", x, y+=h );
-    text("r - LOAD_DEFAULT ", x, y+=h );
+    text("d - LOAD_DEFAULT ", x, y+=h );
     y+=h/2;
     text("p - SET_PITCH_AND_ROLL", x, y+=h );    
     text("y - SET_YAW ", x, y+=h );
     text("i - DEFAULT_ORIENTATION ", x, y+=h );
     y+=h/2;
-    text("r - RECORDING START ", x, y+=h );    
+    text("r - RECORDING START ", x, y+=h );        
     y+=h/2;
 
 
@@ -172,7 +173,7 @@ void keyPressed() {
 
     byte cmd_code = E_CMD_CODE_NONE;
 
-    if (key == 'd' || key == 'D')  // force
+    if (key == 'w' || key == 'W')  // force
         cmd_code = E_CMD_CODE_DEBUG_ACTION;
     if (key == 'c' || key == 'C')  // force
         cmd_code = E_CMD_CODE_CALIBRATE_GYRO;
@@ -194,7 +195,7 @@ void keyPressed() {
         cmd_code = E_CMD_CODE_SAVE;
     if (key == 'l' || key == 'L')
         cmd_code = E_CMD_CODE_LOAD;
-    if (key == 'r' || key == 'R')  //recovery
+    if (key == 'd' || key == 'D')  //recovery
         cmd_code = E_CMD_CODE_LOAD_DEFAULT;  
     if (key == 'y' || key == 'Y')  //yaw
         cmd_code = E_CMD_CODE_SET_YAW_NORTH;
@@ -202,6 +203,8 @@ void keyPressed() {
         cmd_code = E_CMD_CODE_SET_GRAVITY_VECTOR;
     if (key == 'i' || key == 'I')  // pitch
         cmd_code = E_CMD_CODE_DEFAULT_ORIENTATION;
+    if(key == 'v' )
+        cmd_code = E_CMD_CODE_TOGGLE_PRINT_MODE;    
 
     if (key == 'r' || key == 'R') {      
         onCmdRecordStart();   
@@ -312,20 +315,18 @@ void drawTextIface() {
     y = 0;
     textSize(32);
     fill(100, 100, 100);
-    //text("magx " + magx, x, y+=30); 
-    ////fill(0, 100, 0);
-    //text("magy " + magy, x, y+=30);
-    ////fill(0, 0, 100);
-    //text("magz " + magz, x, y+=30);
+    text("magx " + magx, x, y+=30); 
+    //fill(0, 100, 0);
+    text("magy " + magy, x, y+=30);
+    //fill(0, 0, 100);
+    text("magz " + magz, x, y+=30);
 
-    //fill(100, 100, 100);
-    //text("accx " + accx, x, y+=30); 
-    ////fill(0, 100, 0);
-    //text("accy " + accy, x, y+=30);
-    ////fill(0, 0, 100);
-    //text("accz " + accz, x, y+=30);
-
-
+    fill(100, 100, 100);
+    text("accx " + accx, x, y+=30); 
+    //fill(0, 100, 0);
+    text("accy " + accy, x, y+=30);
+    //fill(0, 0, 100);
+    text("accz " + accz, x, y+=30);
 
 
     fill(100, 100, 0);

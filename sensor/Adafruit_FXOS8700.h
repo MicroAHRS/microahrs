@@ -17,88 +17,86 @@
 #ifndef __FXOS8700_H__
 #define __FXOS8700_H__
 
+#if (ARDUINO >= 100)
+ #include "Arduino.h"
+#else
+ #include "WProgram.h"
+#endif
+
 #include "Adafruit_Sensor.h"
 //#include <Wire.h>
 
 
 #define FXOS8700_ADDRESS           (0x1F)     // 0011111
 #define FXOS8700_ID                (0xC7)     // 1100 0111
-#define ACCEL_RANGE_COUNT           3
 
 enum EFXOS8700Register
 {                                             // DEFAULT    TYPE
-    FXOS8700_REGISTER_STATUS          = 0x00,
-    FXOS8700_REGISTER_OUT_X_MSB       = 0x01,
-    FXOS8700_REGISTER_OUT_X_LSB       = 0x02,
-    FXOS8700_REGISTER_OUT_Y_MSB       = 0x03,
-    FXOS8700_REGISTER_OUT_Y_LSB       = 0x04,
-    FXOS8700_REGISTER_OUT_Z_MSB       = 0x05,
-    FXOS8700_REGISTER_OUT_Z_LSB       = 0x06,
-    FXOS8700_REGISTER_WHO_AM_I        = 0x0D,   // 11000111   r
-    FXOS8700_REGISTER_XYZ_DATA_CFG    = 0x0E,
-    FXOS8700_REGISTER_CTRL_REG1       = 0x2A,   // 00000000   r/w
-    FXOS8700_REGISTER_CTRL_REG2       = 0x2B,   // 00000000   r/w
-    FXOS8700_REGISTER_CTRL_REG3       = 0x2C,   // 00000000   r/w
-    FXOS8700_REGISTER_CTRL_REG4       = 0x2D,   // 00000000   r/w
-    FXOS8700_REGISTER_CTRL_REG5       = 0x2E,   // 00000000   r/w
-    FXOS8700_REGISTER_MSTATUS         = 0x32,
-    FXOS8700_REGISTER_MOUT_X_MSB      = 0x33,
-    FXOS8700_REGISTER_MOUT_X_LSB      = 0x34,
-    FXOS8700_REGISTER_MOUT_Y_MSB      = 0x35,
-    FXOS8700_REGISTER_MOUT_Y_LSB      = 0x36,
-    FXOS8700_REGISTER_MOUT_Z_MSB      = 0x37,
-    FXOS8700_REGISTER_MOUT_Z_LSB      = 0x38,
-    FXOS8700_REGISTER_MCTRL_REG1      = 0x5B,   // 00000000   r/w
-    FXOS8700_REGISTER_MCTRL_REG2      = 0x5C,   // 00000000   r/w
-    FXOS8700_REGISTER_MCTRL_REG3      = 0x5D,   // 00000000   r/w
-} ;
+  FXOS8700_REGISTER_STATUS          = 0x00,
+  FXOS8700_REGISTER_OUT_X_MSB       = 0x01,
+  FXOS8700_REGISTER_OUT_X_LSB       = 0x02,
+  FXOS8700_REGISTER_OUT_Y_MSB       = 0x03,
+  FXOS8700_REGISTER_OUT_Y_LSB       = 0x04,
+  FXOS8700_REGISTER_OUT_Z_MSB       = 0x05,
+  FXOS8700_REGISTER_OUT_Z_LSB       = 0x06,
+  FXOS8700_REGISTER_WHO_AM_I        = 0x0D,   // 11000111   r
+  FXOS8700_REGISTER_XYZ_DATA_CFG    = 0x0E,
+  FXOS8700_REGISTER_CTRL_REG1       = 0x2A,   // 00000000   r/w
+  FXOS8700_REGISTER_CTRL_REG2       = 0x2B,   // 00000000   r/w
+  FXOS8700_REGISTER_CTRL_REG3       = 0x2C,   // 00000000   r/w
+  FXOS8700_REGISTER_CTRL_REG4       = 0x2D,   // 00000000   r/w
+  FXOS8700_REGISTER_CTRL_REG5       = 0x2E,   // 00000000   r/w
+  FXOS8700_REGISTER_MSTATUS         = 0x32,
+  FXOS8700_REGISTER_MOUT_X_MSB      = 0x33,
+  FXOS8700_REGISTER_MOUT_X_LSB      = 0x34,
+  FXOS8700_REGISTER_MOUT_Y_MSB      = 0x35,
+  FXOS8700_REGISTER_MOUT_Y_LSB      = 0x36,
+  FXOS8700_REGISTER_MOUT_Z_MSB      = 0x37,
+  FXOS8700_REGISTER_MOUT_Z_LSB      = 0x38,
+  FXOS8700_REGISTER_MCTRL_REG1      = 0x5B,   // 00000000   r/w
+  FXOS8700_REGISTER_MCTRL_REG2      = 0x5C,   // 00000000   r/w
+  FXOS8700_REGISTER_MCTRL_REG3      = 0x5D,   // 00000000   r/w
+};
 
-
-
-
+#define ACCEL_RANGE_COUNT 3
 class Adafruit_FXOS8700 : public Adafruit_Sensor
 {
 public:
-    enum ERange {
-        ACCEL_RANGE_2G  = 0x00,
-        ACCEL_RANGE_4G  = 0x01,
-        ACCEL_RANGE_8G  = 0x02,
+    enum ERange
+    {
+      ACCEL_RANGE_2G                    = 0x00,
+      ACCEL_RANGE_4G                    = 0x01,
+      ACCEL_RANGE_8G                    = 0x02
     };
 
     struct TRawData
     {
-        int16_t x;
-        int16_t y;
-        int16_t z;
+      int16_t x;
+      int16_t y;
+      int16_t z;
     };
-
   public:
-
     Adafruit_FXOS8700(int32_t accelSensorID = -1, int32_t magSensorID = -1);
 
-    bool begin           ( uint8_t rng = ACCEL_RANGE_2G );
-    bool getEvent        ( sensors_event_t* accel );    
+    bool begin           (uint8_t rng = ACCEL_RANGE_2G );
+    bool getEvent        ( sensors_event_t* accel );   
     bool getEvent        ( sensors_event_t* accel, sensors_event_t* mag );
 
-    void getSensor       ( sensor_t* accel );
-    void getSensor       ( sensor_t* accel, sensor_t* mag );
-    uint8_t getRangeG() const {
-        const uint8_t r[] = {2,4,8};
-        return r[m_range];
-    }
+//    void getSensor       ( sensor_t* accel );
+//    void getSensor       ( sensor_t* accel, sensor_t* mag );
 
     TRawData accel_raw; /* Raw values from last sensor read */
     TRawData mag_raw;   /* Raw values from last sensor read */
-
-    inline float getSensivity() const;
 
   private:
     void        write8  ( uint8_t reg, uint8_t value );
     uint8_t     read8   ( uint8_t reg );
 
-    uint8_t     m_range;
-    int32_t     m_accel_sensor_id;
-    int32_t     m_mag_sensor_id;
+    float getSensivity() const;
+
+    uint8_t              m_range;
+    int32_t              m_accel_sensor_id;
+    int32_t              m_mag_sensor_id;
 };
 
 #endif

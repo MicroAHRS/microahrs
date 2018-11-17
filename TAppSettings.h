@@ -15,34 +15,57 @@
 
 #define PRINTOUT_TIME_MS 50
 
+//#define DEVICE_SET_ALL
+//#define DEVICE_SET_1
+#define DEVICE_SET_2
+
 class TAppSettings
 {
 public:
     TAppSettings() { initDefault();}
     void initDefault() {
 
-        //acc_zero_offset = TPoint3F( 0.3253305, -0.3593825, 0.6124513);
-        //acc_zero_offset = TPoint3F( 0.3253305, -0.3593825, 0.6124513);
-        //acc_scale = TPoint3F( 1.01591586, 0.9863349377, 1.017566665 );
+        acc_zero_offset = TPoint3F( 0,0,0);
         acc_scale = TPoint3F( 1, 1, 1 );
-        acc_mode = Adafruit_FXOS8700::ACCEL_RANGE_4G;
-        gyro_mode = Adafruit_FXAS21002C::GYRO_RANGE_250DPS;
         gyro_temperature = TFunction3< TFunctionLineF , float>(
-                //TFunctionLineF(0.02923636286, -2.442451397), // kx kc
-                //TFunctionLineF(-0.00153622977, -0.512149624),
-                //TFunctionLineF(-0.006581737428, 0.4034881183)
                     TFunctionLineF(), // kx kc
                     TFunctionLineF(),
                     TFunctionLineF()
                 );
-        gyro_zero_offset = TPoint3F(0, 0, 0 );
+
+        acc_mode = Adafruit_FXOS8700::ACCEL_RANGE_4G;
+        gyro_mode = Adafruit_FXAS21002C::GYRO_RANGE_250DPS;
+
         mag_matrix = TMatrix3F(
                 TPoint3F(  1, 0, 0 ),
                 TPoint3F(  0, 1, 0 ),
                 TPoint3F(  0, 0, 1 )
         );
-        //mag_offset = TPoint3F( 19.07, 16.78 - 0.25, 63.38 - 0.25);
         mag_offset = TPoint3F( 0, 0, 0);
+        gyro_zero_offset = TPoint3F(0, 0, 0 );
+
+#ifdef DEVICE_SET_1
+        acc_zero_offset = TPoint3F( 0.3253305, -0.3593825, 0.6124513);
+        acc_scale = TPoint3F( 1.01591586, 0.9863349377, 1.017566665 );
+        gyro_temperature = TFunction3< TFunctionLineF , float>(
+                TFunctionLineF(0.02923636286, -2.442451397), // kx kc
+                TFunctionLineF(-0.00153622977, -0.512149624),
+                TFunctionLineF(-0.006581737428, 0.4034881183)
+                );
+        mag_offset = TPoint3F( 19.07, 16.78 - 0.25, 63.38 - 0.25);
+#endif
+#ifdef DEVICE_SET_2
+        acc_zero_offset = TPoint3F( 0.2368895, -0.3661025, 0.3326025);
+        acc_scale = TPoint3F( 1.008551146, 1.005089637, 1.00459703 );
+        gyro_mode = Adafruit_FXAS21002C::GYRO_RANGE_2000DPS;
+
+        mag_matrix = TMatrix3F(
+                TPoint3F(  1.001, 0.026, 0.003 ),
+                TPoint3F(  0.026, 0.9999, 0.001 ),
+                TPoint3F(  0.003, 0.001, 1.001 )
+        );
+        mag_offset = TPoint3F( -72.49,-87.58, 66.34);
+#endif
 
         beta       = 0.05;
         zeta       = beta * 0.1;
@@ -111,7 +134,7 @@ public:
     bool disable_acc;
     bool disable_mag;
 
-    bool print_mag; //print_megnitomemter
+    bool print_mag;
 
     float acc_max_length_sq;
     float acc_min_length_sq;

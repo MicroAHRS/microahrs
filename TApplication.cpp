@@ -12,6 +12,14 @@
 #include "Arduino.h"
 
 #define AHRS_VERSION "1.02"
+#define FLOAT_ACCURENCY 1000000.f
+
+const char* MSG_MAGNIT = "Mag";
+const char* MSG_ACCEL = "Acc";
+const char* MSG_GYRO = "Gyro";
+const char* MSG_DONE = "Done";
+const char* MSG_SUCCESS = "success";
+const char* MSG_FAIL   = "FAIL";
 
 TApplication::TApplication()
    //m_device_gyro( Adafruit_FXAS21002C_termo(0x0021002C) ),
@@ -57,40 +65,29 @@ bool TApplication::init()
     Serial.begin(115200);
     Serial.println();
 
-
     m_ahrs = new TAHRSMadgwick();
     m_settings = new TAppSettings();
     m_device_gyro = new Adafruit_FXAS21002C_termo(0x0021002C);
     m_device_accelmag = new Adafruit_FXOS8700(0x8700A, 0x8700B);
 
-    if(!m_ahrs || !m_settings || !m_device_gyro || !m_device_accelmag) {
-        Serial.println("Out of memory");
-        return false;
-    }
-
     onCommandLoad();
 
-
     // Initialize the sensors.
-    if(!m_device_gyro->begin(Adafruit_FXAS21002C::GYRO_RANGE_250DPS)) {
+    if(!m_device_gyro->begin(m_settings->gyro_mode)) {
         Serial.println("Ooops, no gyro detected ... Check your wiring!");
         return false;
     }
 
-
-    //if(!m_device_accelmag->begin(m_settings->acc_mode)) {
-    if(!m_device_accelmag->begin(Adafruit_FXOS8700::ACCEL_RANGE_4G)) {
+    if(!m_device_accelmag->begin(m_settings->acc_mode)) {
+    //if(!m_device_accelmag->begin(Adafruit_FXOS8700::ACCEL_RANGE_4G)) {
         Serial.println("Ooops, no FXOS8700 detected ... Check your wiring!");
         return false;
     }
 
-
     //pinMode(LED_BUILTIN, OUTPUT);
-
 
     if(m_settings->m_save_count == 0)
         return true;
-
 
     delay(100);
     //updateDevices();
@@ -189,6 +186,8 @@ void TApplication::updateDriftCoefByAngles()
 
 void TApplication::setup()
 {
+    delay(1000);
+
     if(!init())
         while(1);
 
@@ -233,6 +232,11 @@ void TApplication::printOut() {
     TPoint3F acc = getAcc();
     PrintVector(acc);
 
+//    Serial.println(" ");
+//    Serial.println(acc.x * FLOAT_ACCURENCY);
+//    Serial.println(acc.y * FLOAT_ACCURENCY);
+//    Serial.println(acc.z * FLOAT_ACCURENCY);
+
     float temp = getTemperature();
     Serial.print("t: ");
     Serial.print(int(temp));
@@ -250,7 +254,6 @@ void TApplication::printOut() {
         PrintVector(mag);
         Serial.print("fps: ");
         Serial.print(m_fps);
-
     }
     Serial.println();
 
@@ -278,13 +281,13 @@ float GetDeltaTime(unsigned long& last_time, float min_dt)
 }
 
 void TApplication::onCommandResetPitchRoll() {
-    Serial.println("Reset pitch and roll");
+    //Serial.println("Reset pitch and roll");
     TPoint3F angles = m_ahrs->getAngles();
     m_ahrs->setOrientation(TQuaternionF::CreateFormAngles(0,0,angles.z));
 }
 
 void TApplication::onCommandSetYawByMag() {       
-    Serial.println("Set yaw by mag");
+    //Serial.println("Set yaw by mag");
     TPoint3F angles = m_ahrs->getAngles();
     TPoint3F mag = getMagn();
     float yaw = atan2(-mag.y, mag.x);
@@ -351,16 +354,16 @@ void TApplication::CalibrateGyroCycle(float beta_start, float beta_end, float ma
 
 void TApplication::CalibrateGyroStep1(float max_time)
 {                    
-    Serial.println("Start calibrate gyro. Dont move 30 seconds!");
+    Serial.println("Dont move 30 seconds!");
     m_ahrs->setOrientation(TQuaternionF(1.0f, 0.0, 0.0, 0.0));
 
     CalibrateGyroCycle(1, 0.01, max_time);
 
     m_settings->gyro_zero_offset = m_ahrs->m_gyro_error;
 
-    Serial.println("Done.");
+    Serial.println(MSG_DONE);
 }
-#define FLOAT_ACCURENCY 1000000.f
+
 
 void ReadVector(TPoint3F& vec, const char* msg) {
     vec.x = Serial.parseInt() / FLOAT_ACCURENCY;
@@ -377,7 +380,7 @@ void TApplication::onCommandSetMagnitudeMatrix() {
     for(int i=0;i<9 ; i++)
         mtx[i] = Serial.parseInt() / FLOAT_ACCURENCY;
 
-    Serial.print("Set magnitude matrix ");
+    Serial.print("Matrix ");
     for(int i=0;i<9 ; i++) {
         if(i%3 == 0)
             Serial.println();
@@ -389,7 +392,7 @@ void TApplication::onCommandSetMagnitudeMatrix() {
 #define BETA_START 100
 #define BETA_END 1
 void TApplication::onCommandBoostFilter() {
-    Serial.println("Start boost filter");
+    Serial.println("Boost");
     //ускорить фильтр - чтобы выровнить ориентацию    
 
     float dt = 0.01;
@@ -411,7 +414,7 @@ void TApplication::onCommandBoostFilter() {
     }
 
     m_ahrs->setGyroMeas(m_settings->beta,m_settings->zeta);
-    Serial.println("Done");
+    Serial.println(MSG_DONE);
 }
 
 void TApplication::onSettingsChanged() {
@@ -422,31 +425,31 @@ void TApplication::onSettingsChanged() {
 }
 
 void TApplication::onCommandLoad() {
-    Serial.print("Load settings ");
+    Serial.print("Load ");
     if(!m_settings->load()) {
-        Serial.println("FAILD");
+        Serial.println(MSG_FAIL);
         m_settings->initDefault();
     } else {
-        Serial.println("success");
+        Serial.println(MSG_SUCCESS);
     }
     onSettingsChanged();
 }
 
 void TApplication::onCommandSave() {
 
-    Serial.print("Save settings ");
+    Serial.print("Save ");
     m_settings->save();
     //Serial.println(m_settings->m_save_count);
     if(!m_settings->load())
-        Serial.println("FAILD");
+        Serial.println(MSG_FAIL);
     else
-        Serial.println("success");
+        Serial.println(MSG_SUCCESS);
 }
 
 
 void TApplication::onCommandDebugAction()
 {
-    Serial.println("Debug action");
+    Serial.println("Debug");
     static int variant = -1;
 
     variant++;
@@ -505,26 +508,27 @@ inline void ChangeRangeFlags(uint8_t& range, const uint8_t& range_count, bool& d
     }
 }
 
-
 inline void TApplication::onChangeGyroRange() {
     ChangeRangeFlags(m_settings->gyro_mode, GYRO_RANGE_COUNT, m_settings->disable_gyro);
     m_device_gyro->begin(m_settings->gyro_mode);
-    if(m_settings->disable_gyro)
-        Serial.print("Gyro disabled");
-    else
-        Serial.print("Gyro range ");
+    Serial.print(MSG_GYRO);
+    if(m_settings->disable_gyro) {
+        Serial.println(" off");
+    } else {
+        Serial.print(" range ");
         Serial.println(m_device_gyro->getRangeDegrees());
+    }
 }
 
-
 inline void TApplication::onChangeAccRange() {
-    ChangeRangeFlags(m_settings->acc_mode, ACCEL_RANGE_COUNT, m_settings->disable_acc);
-    m_device_accelmag->begin(m_settings->acc_mode);
-    if(m_settings->disable_acc)
-        Serial.print("Acc disabled");
-    else
-        Serial.print("Acc range ");
-        Serial.println(m_device_accelmag->getRangeG());
+//    ChangeRangeFlags(m_settings->acc_mode, ACCEL_RANGE_COUNT, m_settings->disable_acc);
+//    //m_device_accelmag->begin(m_settings->acc_mode);
+//    if(m_settings->disable_acc) {
+//        Serial.println("Acc disabled");
+//    } else {
+//        Serial.print("Acc range ");
+//        Serial.println(m_device_accelmag->getRangeG());
+//    }
 }
 
 
@@ -534,7 +538,7 @@ void ToggleFlag(bool& flag, const char* name, bool inverse)
 {
     flag = !flag;
     Serial.print(name);
-    Serial.println(flag ^ inverse ? " enabled": " disabled");
+    Serial.println(flag ^ inverse ? " on": " off");
 }
 
 void ChagneCoef(float& coef)
@@ -547,6 +551,9 @@ void ChagneCoef(float& coef)
         coef = 0.0005f;
 
 }
+
+
+
 
 void TApplication::receiveCmd() {
     if (!Serial.available())
@@ -573,31 +580,30 @@ void TApplication::receiveCmd() {
         return onCommandCalibrateGyro();
 
     case E_CMD_CODE_SET_MAGNITUDE_OFFSET:
-        ReadVector(m_settings->mag_offset, "Set magnitude offset ");
+        ReadVector(m_settings->mag_offset, "m o");
         break;
     case E_CMD_CODE_SET_MAGNITUDE_MATRIX:
         return onCommandSetMagnitudeMatrix();
 
     case E_CMD_CODE_SET_ACC_OFFSET:
-        ReadVector(m_settings->acc_zero_offset, "Set accel offset ");
+        ReadVector(m_settings->acc_zero_offset, "a o");
         break;
     case E_CMD_CODE_SET_ACC_SCALE:
-        ReadVector(m_settings->acc_scale, "Set accel scale ");
+        ReadVector(m_settings->acc_scale, "a s");
         break;
 
-    case E_CMD_CODE_SET_GRAVITY_VECTOR:
+    case E_CMD_CODE_SET_GRAVITY_VECTOR:        
         return onCommandSetGravityVector();
-
-    case E_CMD_CODE_SET_YAW_NORTH:
+    case E_CMD_CODE_SET_YAW_NORTH:        
         return onCommandSetMagnitudeVector();
-    case E_CMD_CODE_DEFAULT_ORIENTATION:
+    case E_CMD_CODE_DEFAULT_ORIENTATION:        
         m_settings->sensor_to_frame_orientation = TQuaternionF(1,0,0,0);
         break;
     case E_CMD_CODE_DEBUG_ACTION:
         return onCommandDebugAction();
 
     case E_CMD_CODE_TOGGLE_PRINT_MODE:
-        ToggleFlag(m_settings->print_mag, "Mag print", false);
+        ToggleFlag(m_settings->print_mag, "prnt mode", false);
         break;
 
     case E_CMD_CODE_TOGGLE_GYRO:
@@ -607,11 +613,11 @@ void TApplication::receiveCmd() {
         m_ahrs->setGyroError( m_settings->disable_gyro ? TPoint3F(0,0,0) : m_settings->gyro_zero_offset) ;
         break;
     case E_CMD_CODE_TOGGLE_ACC:
-        onChangeAccRange();
-        //ToggleFlag(m_settings->disable_acc, "Accel", true);
+        //onChangeAccRange();
+        ToggleFlag(m_settings->disable_acc, MSG_ACCEL, true);
         break;
     case E_CMD_CODE_TOGGLE_MAG:
-        ToggleFlag(m_settings->disable_mag, "Magnit", true);
+        ToggleFlag(m_settings->disable_mag, MSG_MAGNIT, true);
         break;
 
     case E_CMD_CODE_CHANGE_BETA:
@@ -628,7 +634,7 @@ void TApplication::receiveCmd() {
     case E_CMD_CODE_SAVE:
         return onCommandSave();
     case E_CMD_CODE_LOAD_DEFAULT: {
-        Serial.println("Load deafult settings. Done.");
+        Serial.println(MSG_DONE);
         uint16_t save_cnt = m_settings->m_save_count;
         m_settings->initDefault();
         m_settings->m_save_count = save_cnt;
@@ -636,7 +642,7 @@ void TApplication::receiveCmd() {
         break;
     }
     default:
-        Serial.println("Unknown command!");
+        Serial.println(MSG_FAIL);
     }
 }
 
