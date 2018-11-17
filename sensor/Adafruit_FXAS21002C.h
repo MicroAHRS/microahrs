@@ -22,12 +22,14 @@
 class Adafruit_FXAS21002C : public Adafruit_Sensor
 {
 public:
+    // see https://cdn-learn.adafruit.com/assets/assets/000/040/671/original/FXAS21002.pdf?1491475056
     enum EGyroRange {
-        GYRO_RANGE_250DPS  = 250,
-        GYRO_RANGE_500DPS  = 500,
-        GYRO_RANGE_1000DPS = 1000,
-        GYRO_RANGE_2000DPS = 2000
+        GYRO_RANGE_250DPS  = 3,
+        GYRO_RANGE_500DPS  = 2,
+        GYRO_RANGE_1000DPS = 1,
+        GYRO_RANGE_2000DPS = 0,
     };
+#define GYRO_RANGE_COUNT 4
 
     struct TGyroRawData {
         int16_t x;
@@ -37,22 +39,25 @@ public:
 public:
     Adafruit_FXAS21002C(int32_t sensorID = -1);
 
-    bool begin           ( EGyroRange rng = GYRO_RANGE_250DPS );
+    bool begin           ( uint8_t rng = GYRO_RANGE_250DPS );
     bool getEvent        ( sensors_event_t* event);
-    bool getEvent        ( sensors_event_t* , sensors_event_t *temp_event );
+    bool getEvent        ( sensors_event_t* , sensors_event_t *temp_event );    
     void getSensor       ( sensor_t* );
+    uint16_t        getRangeDegrees();
 
     TGyroRawData    m_raw_data; /* Raw values from last sensor read */
     int8_t          m_raw_temperature;
 
-protected:
-    void        write8  ( byte reg, byte value );
-    byte        read8   ( byte reg );
-    byte        getFullScaleCode(const EGyroRange& rng );
-    float       getSensitivity(const EGyroRange& rng );
 
-    EGyroRange  _range;
-    int32_t     _sensorID;    
+protected:
+    void        write8  ( uint8_t reg, uint8_t value );
+    uint8_t     read8   ( uint8_t reg );
+    //inline uint8_t     getFullScaleCode(const EGyroRange& rng );
+    inline float       getSensitivity(const EGyroRange& rng );
+
+
+    EGyroRange  m_range_code;
+    int32_t     m_sensor_id;
 };
 
 #endif

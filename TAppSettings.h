@@ -8,6 +8,9 @@
 #include "shared/Function/TFunctionLineF.h"
 #include <EEPROM.h>
 
+#include "Adafruit_FXOS8700.h"
+#include "Adafruit_FXAS21002C.h"
+
 #define SETTINGS_ADDRESS 10
 
 #define PRINTOUT_TIME_MS 50
@@ -22,6 +25,8 @@ public:
         //acc_zero_offset = TPoint3F( 0.3253305, -0.3593825, 0.6124513);
         //acc_scale = TPoint3F( 1.01591586, 0.9863349377, 1.017566665 );
         acc_scale = TPoint3F( 1, 1, 1 );
+        acc_mode = Adafruit_FXOS8700::ACCEL_RANGE_4G;
+        gyro_mode = Adafruit_FXAS21002C::GYRO_RANGE_250DPS;
         gyro_temperature = TFunction3< TFunctionLineF , float>(
                 //TFunctionLineF(0.02923636286, -2.442451397), // kx kc
                 //TFunctionLineF(-0.00153622977, -0.512149624),
@@ -62,7 +67,7 @@ public:
         m_crc = 0;
     }
 
-    static uint32_t updateCRC32(uint32_t crc, byte b) {
+    static uint32_t updateCRC32(uint32_t crc, uint8_t b) {
         const unsigned long crc_table[16] = {
           0x00000000, 0x1db71064, 0x3b6e20c8, 0x26d930ac,
           0x76dc4190, 0x6b6b51f4, 0x4db26158, 0x5005713c,
@@ -118,11 +123,14 @@ public:
     TPoint3F  mag_offset;
     TMatrix3F mag_matrix;
     // gyro calibration
+    uint8_t   gyro_mode;
     TPoint3F  gyro_zero_offset;
     TFunction3< TFunctionLineF , float> gyro_temperature;
     // acc colibration
     TPoint3F  acc_zero_offset;
     TPoint3F  acc_scale;
+    uint8_t   acc_mode;
+
 
     // default orientation
     TQuaternionF sensor_to_frame_orientation;

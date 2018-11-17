@@ -50,7 +50,7 @@ TAHRSMadgwick::TAHRSMadgwick()
     setOrientation(TQuaternionF( 1.0f, 0, 0, 0));    
 //    m_gravity = TPoint3F(0,0,1);
 //    m_magnitude = TPoint3F(1,0,0);
-    setZetaMaxAngle(2);
+    setZetaMaxAngle(90);
 }
 
 

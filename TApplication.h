@@ -1,12 +1,18 @@
 #ifndef TAPPLICATIONARDUINO_H
 #define TAPPLICATIONARDUINO_H
 
-#include <Adafruit_FXAS21002C_termo.h>
-#include <Adafruit_FXOS8700.h>
+//#include <Adafruit_FXAS21002C_termo.h>
+
 #include "shared/Geometry/TPoint3F.h"
-#include "TAHRSMadgwick.h"
-#include "TAppSettings.h"
-#include "ECommandCode.h"
+
+#include "Adafruit_Sensor.h"
+
+
+class TAppSettings;
+class Adafruit_FXAS21002C_termo;
+class Adafruit_FXAS21002C;
+class Adafruit_FXOS8700;
+class TAHRSMadgwick;
 
 class TApplication
 {
@@ -32,20 +38,22 @@ protected:
     inline void onCommandResetPitchRoll();
     inline void onCommandSetYawByMag();
     inline void onCommandSetPitchRollByAcc();
-    void onCommandBoostFilter();
+    void        onCommandBoostFilter();
     inline void onCommandCalibrateGyro();
     inline void onCommandSetGravityVector();
     inline void onCommandSetMagnitudeVector();
-    void onCommandLoad();
+    void        onCommandLoad();
     inline void onCommandSave();
     inline void onCommandSetMagnitudeMatrix();
     inline void onCommandDebugAction();
+    inline void onChangeGyroRange();
 
     void receiveCmd();
 
     void CalibrateGyroCycle(float beta_start, float beta_end, float max_time);
     void CalibrateGyroStep1(float max_time);
     void onSettingsChanged();
+    void onChangeAccRange();
 
 private:
     unsigned long   m_fps;
@@ -61,10 +69,11 @@ private:
     sensors_event_t accel_event;
     sensors_event_t mag_event;
 
-    TAHRSMadgwick                m_ahrs;
-    Adafruit_FXAS21002C_termo    m_device_gyro;
-    Adafruit_FXOS8700            m_device_accelmag;
-    TAppSettings                 m_settings;
+    TAHRSMadgwick*                m_ahrs;
+    //Adafruit_FXAS21002C_termo    m_device_gyro;
+    Adafruit_FXAS21002C_termo*    m_device_gyro;
+    Adafruit_FXOS8700*            m_device_accelmag;
+    TAppSettings*                 m_settings;
 };
 
 #endif // TAPPLICATIONARDUINO_H

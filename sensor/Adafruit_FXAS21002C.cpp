@@ -14,14 +14,10 @@
   Written by Kevin "KTOWN" Townsend for Adafruit Industries.
   BSD license, all text above must be included in any redistribution
  ****************************************************/
-#if ARDUINO >= 100
- #include "Arduino.h"
-#else
- #include "WProgram.h"
-#endif
 
+#include "Arduino.h"
 #include <Wire.h>
-#include <limits.h>
+//#include <limits.h>
 
 #include "Adafruit_FXAS21002C.h"
 
@@ -69,7 +65,7 @@
     @brief  Abstract away platform differences in Arduino wire library
 */
 /**************************************************************************/
-void Adafruit_FXAS21002C::write8(byte reg, byte value)
+void Adafruit_FXAS21002C::write8(uint8_t reg, uint8_t value)
 {
   Wire.beginTransmission(FXAS21002C_ADDRESS);
   #if ARDUINO >= 100
@@ -87,18 +83,18 @@ void Adafruit_FXAS21002C::write8(byte reg, byte value)
     @brief  Abstract away platform differences in Arduino wire library
 */
 /**************************************************************************/
-byte Adafruit_FXAS21002C::read8(byte reg)
+uint8_t Adafruit_FXAS21002C::read8(uint8_t reg)
 {
-  byte value;
+  uint8_t value;
 
-  Wire.beginTransmission((byte)FXAS21002C_ADDRESS);
+  Wire.beginTransmission((uint8_t)FXAS21002C_ADDRESS);
   #if ARDUINO >= 100
     Wire.write((uint8_t)reg | 0x80);
   #else
     Wire.send(reg | 0x80);
   #endif
   if (Wire.endTransmission(false) != 0) return 0;
-  Wire.requestFrom((byte)FXAS21002C_ADDRESS, (byte)1);
+  Wire.requestFrom((uint8_t)FXAS21002C_ADDRESS, (uint8_t)1);
   #if ARDUINO >= 100
     value = Wire.read();
   #else
@@ -123,27 +119,41 @@ float  Adafruit_FXAS21002C::getSensitivity(const Adafruit_FXAS21002C::EGyroRange
     return GYRO_SENSITIVITY_2000DPS;
 }
 
-byte Adafruit_FXAS21002C::getFullScaleCode(const Adafruit_FXAS21002C::EGyroRange& rng )
-{
-    /*
-    * 1:0 FullScale
-    *     00  = 2000
-    *     01  = 1000
-    *     10  = 500
-    *     11  = 250
-    *
-    * see https://cdn-learn.adafruit.com/assets/assets/000/040/671/original/FXAS21002.pdf?1491475056
-    *  Selectable Full Scale Ranges
-    */
-    switch (rng) {
+//inline uint8_t Adafruit_FXAS21002C::getFullScaleCode(const Adafruit_FXAS21002C::EGyroRange& rng )
+//{
+//    /*
+//    * 1:0 FullScale
+//    *     00  = 2000
+//    *     01  = 1000
+//    *     10  = 500
+//    *     11  = 250
+//    *
+//    * see https://cdn-learn.adafruit.com/assets/assets/000/040/671/original/FXAS21002.pdf?1491475056
+//    *  Selectable Full Scale Ranges
+//    */
+//    switch (rng) {
+//    case  GYRO_RANGE_250DPS:
+//        return 0x3;
+//    case GYRO_RANGE_500DPS:
+//        return 0x2;
+//    case GYRO_RANGE_1000DPS:
+//        return 0x1;
+//    case GYRO_RANGE_2000DPS:
+//        return 0x0;
+//    }
+//    return 0x0;
+//}
+
+uint16_t Adafruit_FXAS21002C::getRangeDegrees() {
+    switch (m_range_code) {
     case  GYRO_RANGE_250DPS:
-        return 0x3;
+        return 250;
     case GYRO_RANGE_500DPS:
-        return 0x2;
+        return 500;
     case GYRO_RANGE_1000DPS:
-        return 0x1;
+        return 1000;
     case GYRO_RANGE_2000DPS:
-        return 0x0;
+        return 2000;
     }
     return 0x0;
 }
@@ -158,26 +168,18 @@ byte Adafruit_FXAS21002C::getFullScaleCode(const Adafruit_FXAS21002C::EGyroRange
 */
 /**************************************************************************/
 Adafruit_FXAS21002C::Adafruit_FXAS21002C(int32_t sensorID) {
-  _sensorID = sensorID;  
+  m_sensor_id = sensorID;
   m_raw_temperature = 0;
 }
 
-/***************************************************************************
- PUBLIC FUNCTIONS
- ***************************************************************************/
 
-/**************************************************************************/
-/*!
-    @brief  Setups the HW
-*/
-/**************************************************************************/
-bool Adafruit_FXAS21002C::begin(EGyroRange rng)
+bool Adafruit_FXAS21002C::begin(uint8_t rng)
 {
   /* Enable I2C */
   Wire.begin();
 
   /* Set the range the an appropriate value */
-  _range = rng;
+  m_range_code = (EGyroRange)rng;
 
   /* Clear the raw sensor data */
   m_raw_data.x = 0;
@@ -229,7 +231,7 @@ bool Adafruit_FXAS21002C::begin(EGyroRange rng)
    *
    * see https://cdn-learn.adafruit.com/assets/assets/000/040/671/original/FXAS21002.pdf?1491475056
    */
-  write8(GYRO_REGISTER_CTRL_REG0, getFullScaleCode(rng));// TODO try hi-pass filter
+  write8(GYRO_REGISTER_CTRL_REG0, m_range_code);// TODO try hi-pass filter
 
   write8(GYRO_REGISTER_CTRL_REG1, 0x0E); // 000-011-1-0     = 100 hz - active -
 
@@ -258,37 +260,27 @@ bool Adafruit_FXAS21002C::getEvent(sensors_event_t* event, sensors_event_t* temp
     m_raw_data.z = 0;
 
     event->version   = sizeof(sensors_event_t);
-    event->sensor_id = _sensorID;
+    event->sensor_id = m_sensor_id;
     event->type      = SENSOR_TYPE_GYROSCOPE;
     event->timestamp = millis();
 
     /* Read 7 bytes from the sensor */
-    Wire.beginTransmission((byte)FXAS21002C_ADDRESS);
+    Wire.beginTransmission((uint8_t)FXAS21002C_ADDRESS);
     #if ARDUINO >= 100
     Wire.write(GYRO_REGISTER_STATUS | 0x80);
     #else
     Wire.send(GYRO_REGISTER_STATUS | 0x80);
     #endif
     Wire.endTransmission();
-    Wire.requestFrom((byte)FXAS21002C_ADDRESS, (byte)7);
+    Wire.requestFrom((uint8_t)FXAS21002C_ADDRESS, (uint8_t)7);
 
-    #if ARDUINO >= 100
     /*uint8_t status =*/ Wire.read();
     uint8_t xhi = Wire.read();
     uint8_t xlo = Wire.read();
     uint8_t yhi = Wire.read();
     uint8_t ylo = Wire.read();
     uint8_t zhi = Wire.read();
-    uint8_t zlo = Wire.read();
-    #else
-    /*uint8_t status =*/ Wire.receive();
-    uint8_t xhi = Wire.receive();
-    uint8_t xlo = Wire.receive();
-    uint8_t yhi = Wire.receive();
-    uint8_t ylo = Wire.receive();
-    uint8_t zhi = Wire.receive();
-    uint8_t zlo = Wire.receive();
-    #endif
+    uint8_t zlo = Wire.read();  
 
     /* Shift values to create properly formed integer */
     event->gyro.x = (m_raw_data.x = (int16_t)((xhi << 8) | xlo));
@@ -296,7 +288,7 @@ bool Adafruit_FXAS21002C::getEvent(sensors_event_t* event, sensors_event_t* temp
     event->gyro.z = (m_raw_data.z = (int16_t)((zhi << 8) | zlo));
 
 
-    float sensitivity = getSensitivity(_range);
+    float sensitivity = getSensitivity(m_range_code);
     sensitivity *= SENSORS_DPS_TO_RADS; /* Convert values to rad/s */
 
     /* Compensate values depending on the resolution */
@@ -308,7 +300,7 @@ bool Adafruit_FXAS21002C::getEvent(sensors_event_t* event, sensors_event_t* temp
         m_raw_temperature = read8(GYRO_REGISTER_TEMP);
         temp_event->temperature = m_raw_temperature;
         temp_event->version   = sizeof(sensors_event_t);
-        temp_event->sensor_id = _sensorID;
+        temp_event->sensor_id = m_sensor_id;
         temp_event->type      = SENSOR_TYPE_AMBIENT_TEMPERATURE;
     }
 
@@ -320,6 +312,8 @@ bool Adafruit_FXAS21002C::getEvent(sensors_event_t* event)
     return getEvent(event , NULL);
 }
 
+
+#ifndef DISABLE_SENSOR_INFO
 /**************************************************************************/
 /*!
     @brief  Gets the sensor_t data
@@ -337,12 +331,12 @@ void  Adafruit_FXAS21002C::getSensor(sensor_t* sensor)
   sensor->sensor_id   = _sensorID;
   sensor->type        = SENSOR_TYPE_GYROSCOPE;
   sensor->min_delay   = 0;
-  sensor->max_value   = (float)this->_range * SENSORS_DPS_TO_RADS;
-  sensor->min_value   = (this->_range * -1.0) * SENSORS_DPS_TO_RADS;
+  sensor->max_value   = (float)getRangeDegrees(_range) * SENSORS_DPS_TO_RADS;
+  sensor->min_value   = (getRangeDegrees(_range) * -1.0) * SENSORS_DPS_TO_RADS;
   sensor->resolution  = 0.0F; // TBD
 }
 
-
+#endif
 
 
 

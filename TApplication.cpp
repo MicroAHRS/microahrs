@@ -1,16 +1,20 @@
 #include "TApplication.h"
 
+#include "ECommandCode.h"
 
-#include <Adafruit_FXAS21002C_termo.h>
 #include <Adafruit_FXOS8700.h>
-
 #include "TAHRSMadgwick.h"
+#include "TAppSettings.h"
+#include <Adafruit_FXAS21002C.h>
+#include <Adafruit_FXAS21002C_termo.h>
+
+
+#include "Arduino.h"
 
 #define AHRS_VERSION "1.02"
 
-TApplication::TApplication() :
-   m_device_gyro( Adafruit_FXAS21002C_termo(0x0021002C) ),
-   m_device_accelmag( Adafruit_FXOS8700(0x8700A, 0x8700B))
+TApplication::TApplication()
+   //m_device_gyro( Adafruit_FXAS21002C_termo(0x0021002C) ),
 
 {
     m_temperature = 0;
@@ -51,27 +55,40 @@ void PrintQuaternion(const TQuaternionF& q) {
 bool TApplication::init()
 {
     Serial.begin(115200);
+    Serial.println();
+
+
+    m_ahrs = new TAHRSMadgwick();
+    m_settings = new TAppSettings();
+    m_device_gyro = new Adafruit_FXAS21002C_termo(0x0021002C);
+    m_device_accelmag = new Adafruit_FXOS8700(0x8700A, 0x8700B);
+
+    if(!m_ahrs || !m_settings || !m_device_gyro || !m_device_accelmag) {
+        Serial.println("Out of memory");
+        return false;
+    }
+
+    onCommandLoad();
 
 
     // Initialize the sensors.
-    if(!m_device_gyro.begin()) {
+    if(!m_device_gyro->begin(Adafruit_FXAS21002C::GYRO_RANGE_250DPS)) {
         Serial.println("Ooops, no gyro detected ... Check your wiring!");
         return false;
     }
 
 
-    if(!m_device_accelmag.begin(ACCEL_RANGE_4G)) {
+    //if(!m_device_accelmag->begin(m_settings->acc_mode)) {
+    if(!m_device_accelmag->begin(Adafruit_FXOS8700::ACCEL_RANGE_4G)) {
         Serial.println("Ooops, no FXOS8700 detected ... Check your wiring!");
         return false;
     }
 
 
-    pinMode(LED_BUILTIN, OUTPUT);
+    //pinMode(LED_BUILTIN, OUTPUT);
 
-    Serial.println();
 
-    onCommandLoad();
-    if(m_settings.m_save_count == 0)
+    if(m_settings->m_save_count == 0)
         return true;
 
 
@@ -88,8 +105,8 @@ bool TApplication::init()
 
 
 inline TPoint3F TApplication::getMagn() {
-    TPoint3F mag_vec = VectorFromEvent(mag_event.magnetic) - m_settings.mag_offset;
-    return m_settings.mag_matrix * mag_vec;
+    TPoint3F mag_vec = VectorFromEvent(mag_event.magnetic) - m_settings->mag_offset;
+    return m_settings->mag_matrix * mag_vec;
 }
 inline TPoint3F TApplication::getGyro() {    
     return VectorFromEvent(gyro_event.gyro);
@@ -99,7 +116,7 @@ inline float TApplication::getTemperature() {
 }
 
 inline TPoint3F TApplication::getAcc() {    
-    return (VectorFromEvent(accel_event.acceleration) - m_settings.acc_zero_offset).scale(m_settings.acc_scale);
+    return (VectorFromEvent(accel_event.acceleration) - m_settings->acc_zero_offset).scale(m_settings->acc_scale);
 }
 
 void TApplication::update(float dt)
@@ -117,8 +134,8 @@ void TApplication::update(float dt)
 }
 #include "shared/in_range.hpp"
 void TApplication::updateDevices() {
-    m_device_gyro.getEvent(&gyro_event,&gyro_t_event);
-    m_device_accelmag.getEvent(&accel_event, &mag_event);
+    m_device_gyro->getEvent(&gyro_event,&gyro_t_event);
+    m_device_accelmag->getEvent(&accel_event, &mag_event);
     m_temperature = gyro_t_event.temperature;
 }
 
@@ -131,15 +148,15 @@ void TApplication::updateAHRS(float dt) {
 //    if(!m_enable_accel_by_angle)
 //        acc = TPoint3F(0,0,0);
 
-    if(m_settings.disable_mag)
+    if(m_settings->disable_mag)
         mag = TPoint3F(0,0,0);
-    if(m_settings.disable_acc)
+    if(m_settings->disable_acc)
         acc = TPoint3F(0,0,0);
-    if(m_settings.disable_gyro)
+    if(m_settings->disable_gyro)
         gyr = TPoint3F(0,0,0);
 
 
-    m_ahrs.update(gyr,acc,mag,dt);
+    m_ahrs->update(gyr,acc,mag,dt);
 }
 
 void TApplication::updateDriftCoefByAngles()
@@ -147,18 +164,18 @@ void TApplication::updateDriftCoefByAngles()
     float acc_len_square = getAcc().lengthSq();
     // if pitch or roll too big
     // set beta to smoler value    
-    if(!InRangeInc(acc_len_square, m_settings.acc_min_length_sq, m_settings.acc_max_length_sq )) {
-        m_ahrs.setGyroMeas(0,0);
+    if(!InRangeInc(acc_len_square, m_settings->acc_min_length_sq, m_settings->acc_max_length_sq )) {
+        m_ahrs->setGyroMeas(0,0);
         return;
     }
 
-    float beta = m_settings.beta;
-    float zeta = m_settings.zeta;
+    float beta = m_settings->beta;
+    float zeta = m_settings->zeta;
 
-    // TPoint3F angles = m_ahrs.getAngles(); // USE modidfed angles
+    // TPoint3F angles = m_ahrs->getAngles(); // USE modidfed angles
     // TODO change beta zeta by angle
 
-    m_ahrs.setGyroMeas(beta, zeta);
+    m_ahrs->setGyroMeas(beta, zeta);
 
 }
 
@@ -206,9 +223,9 @@ void TApplication::loop()
 
 
 void TApplication::printOut() {
-    TQuaternionF q = m_ahrs.m_q * m_settings.sensor_to_frame_orientation;
+    TQuaternionF q = m_ahrs->m_q * m_settings->sensor_to_frame_orientation;
     TPoint3F angles = q.getAngles();
-    //TPoint3F angles = m_ahrs.getAngles();
+    //TPoint3F angles = m_ahrs->getAngles();
     Serial.print("Orient: ");
     PrintVector(angles * CONVERT_RAD_TO_DPS);
 
@@ -220,13 +237,13 @@ void TApplication::printOut() {
     Serial.print("t: ");
     Serial.print(int(temp));
 
-    if(m_settings.print_mag) {
+    if(m_settings->print_mag) {
         Serial.print(" gerr: ");
-        PrintVector(m_ahrs.m_gyro_error * CONVERT_RAD_TO_DPS * 1000);
+        PrintVector(m_ahrs->m_gyro_error * CONVERT_RAD_TO_DPS * 1000);
 
-        Serial.print(m_ahrs.beta * 1000 * CONVERT_RAD_TO_DPS / 0.866025404);
+        Serial.print(m_ahrs->beta * 1000 * CONVERT_RAD_TO_DPS / 0.866025404);
         Serial.print(" ");
-        Serial.print(m_ahrs.zeta * 1000 * CONVERT_RAD_TO_DPS / 0.866025404);
+        Serial.print(m_ahrs->zeta * 1000 * CONVERT_RAD_TO_DPS / 0.866025404);
         Serial.print(" ");
         Serial.print("mag: ");
         TPoint3F mag = getMagn();
@@ -238,9 +255,9 @@ void TApplication::printOut() {
     Serial.println();
 
     //Serial.print("q_dor: ");
-    //PrintQuaternion(m_ahrs.m_q_dot * 1000);
+    //PrintQuaternion(m_ahrs->m_q_dot * 1000);
 //    Serial.print("zeta: ");
-//    Serial.print((m_ahrs.zeta * CONVERT_RAD_TO_DPS) / sqrt(3.0f / 4.0f) );
+//    Serial.print((m_ahrs->zeta * CONVERT_RAD_TO_DPS) / sqrt(3.0f / 4.0f) );
 }
 
 
@@ -262,16 +279,16 @@ float GetDeltaTime(unsigned long& last_time, float min_dt)
 
 void TApplication::onCommandResetPitchRoll() {
     Serial.println("Reset pitch and roll");
-    TPoint3F angles = m_ahrs.getAngles();
-    m_ahrs.setOrientation(TQuaternionF::CreateFormAngles(0,0,angles.z));
+    TPoint3F angles = m_ahrs->getAngles();
+    m_ahrs->setOrientation(TQuaternionF::CreateFormAngles(0,0,angles.z));
 }
 
 void TApplication::onCommandSetYawByMag() {       
     Serial.println("Set yaw by mag");
-    TPoint3F angles = m_ahrs.getAngles();
+    TPoint3F angles = m_ahrs->getAngles();
     TPoint3F mag = getMagn();
     float yaw = atan2(-mag.y, mag.x);
-    m_ahrs.setOrientation(TQuaternionF::CreateFormAngles(angles.x,angles.y,yaw));
+    m_ahrs->setOrientation(TQuaternionF::CreateFormAngles(angles.x,angles.y,yaw));
 }
 
 void TApplication::onCommandSetPitchRollByAcc() {
@@ -280,24 +297,24 @@ void TApplication::onCommandSetPitchRollByAcc() {
 
 void TApplication::onCommandSetGravityVector() {
 
-    TPoint3F angles = (m_ahrs.m_q * m_settings.sensor_to_frame_orientation).getAngles();
-    m_settings.sensor_to_frame_orientation *= TQuaternionF::CreateFormAngles( -angles.x , -angles.y , 0) ;
+    TPoint3F angles = (m_ahrs->m_q * m_settings->sensor_to_frame_orientation).getAngles();
+    m_settings->sensor_to_frame_orientation *= TQuaternionF::CreateFormAngles( -angles.x , -angles.y , 0) ;
 }
 
 void TApplication::onCommandSetMagnitudeVector() {
 
-    TPoint3F angles = (m_ahrs.m_q * m_settings.sensor_to_frame_orientation).getAngles();
-    m_settings.sensor_to_frame_orientation *= TQuaternionF::CreateFormAngles( 0,0,-angles.z) ;
+    TPoint3F angles = (m_ahrs->m_q * m_settings->sensor_to_frame_orientation).getAngles();
+    m_settings->sensor_to_frame_orientation *= TQuaternionF::CreateFormAngles( 0,0,-angles.z) ;
 }
 
 void TApplication::onCommandCalibrateGyro()
 {
-    TQuaternionF q = m_ahrs.m_q;
+    TQuaternionF q = m_ahrs->m_q;
     CalibrateGyroStep1(30);
 
-    m_ahrs.setOrientation(q);
-    m_ahrs.setGyroError(m_settings.gyro_zero_offset);
-    m_ahrs.setGyroMeas(m_settings.beta, m_settings.zeta);
+    m_ahrs->setOrientation(q);
+    m_ahrs->setGyroError(m_settings->gyro_zero_offset);
+    m_ahrs->setGyroMeas(m_settings->beta, m_settings->zeta);
 }
 
 void TApplication::CalibrateGyroCycle(float beta_start, float beta_end, float max_time)
@@ -325,21 +342,21 @@ void TApplication::CalibrateGyroCycle(float beta_start, float beta_end, float ma
 
         float beta = Lerp(GetProgressSection(time,0,max_time), beta_start, beta_end);
         float zeta = beta * 0.1;
-        m_ahrs.setGyroMeas(beta,zeta);
+        m_ahrs->setGyroMeas(beta,zeta);
         updateDevices();
         TPoint3F gyr = getGyro();
-        m_ahrs.update(gyr, gravity, mag, dt);
+        m_ahrs->update(gyr, gravity, mag, dt);
     }
 }
 
 void TApplication::CalibrateGyroStep1(float max_time)
 {                    
     Serial.println("Start calibrate gyro. Dont move 30 seconds!");
-    m_ahrs.setOrientation(TQuaternionF(1.0f, 0.0, 0.0, 0.0));
+    m_ahrs->setOrientation(TQuaternionF(1.0f, 0.0, 0.0, 0.0));
 
     CalibrateGyroCycle(1, 0.01, max_time);
 
-    m_settings.gyro_zero_offset = m_ahrs.m_gyro_error;
+    m_settings->gyro_zero_offset = m_ahrs->m_gyro_error;
 
     Serial.println("Done.");
 }
@@ -355,7 +372,7 @@ void ReadVector(TPoint3F& vec, const char* msg) {
 }
 
 void TApplication::onCommandSetMagnitudeMatrix() {
-    float* mtx = &m_settings.mag_matrix.x[0][0];
+    float* mtx = &m_settings->mag_matrix.x[0][0];
 
     for(int i=0;i<9 ; i++)
         mtx[i] = Serial.parseInt() / FLOAT_ACCURENCY;
@@ -381,34 +398,34 @@ void TApplication::onCommandBoostFilter() {
         if(i%10 == 0) {
             float progress = GetProgressSection(i , 0, MAX_I);
             float beta = Lerp(progress, BETA_START, BETA_END);       
-            m_ahrs.setGyroMeas(beta,0);
+            m_ahrs->setGyroMeas(beta,0);
         }
 
         updateDevices();
         TPoint3F gyr(0,0,0);
         TPoint3F acc = getAcc();
         TPoint3F mag = getMagn();
-        m_ahrs.update(gyr,acc,mag, dt);
+        m_ahrs->update(gyr,acc,mag, dt);
         if(i%20 == 0)
             printOut();
     }
 
-    m_ahrs.setGyroMeas(m_settings.beta,m_settings.zeta);
+    m_ahrs->setGyroMeas(m_settings->beta,m_settings->zeta);
     Serial.println("Done");
 }
 
 void TApplication::onSettingsChanged() {
 
-    m_ahrs.setGyroError(m_settings.gyro_zero_offset);
-    m_ahrs.setGyroMeas(m_settings.beta, m_settings.zeta);
-    m_device_gyro.setCalibrateFunction( m_settings.gyro_temperature );
+    m_ahrs->setGyroError(m_settings->gyro_zero_offset);
+    m_ahrs->setGyroMeas(m_settings->beta, m_settings->zeta);
+    m_device_gyro->setCalibrateFunction( m_settings->gyro_temperature );
 }
 
 void TApplication::onCommandLoad() {
     Serial.print("Load settings ");
-    if(!m_settings.load()) {
+    if(!m_settings->load()) {
         Serial.println("FAILD");
-        m_settings.initDefault();
+        m_settings->initDefault();
     } else {
         Serial.println("success");
     }
@@ -418,9 +435,9 @@ void TApplication::onCommandLoad() {
 void TApplication::onCommandSave() {
 
     Serial.print("Save settings ");
-    m_settings.save();
-    //Serial.println(m_settings.m_save_count);
-    if(!m_settings.load())
+    m_settings->save();
+    //Serial.println(m_settings->m_save_count);
+    if(!m_settings->load())
         Serial.println("FAILD");
     else
         Serial.println("success");
@@ -470,9 +487,44 @@ void TApplication::onCommandDebugAction()
     if(variant >= 16)
         variant = 0;
 
-    //m_ahrs.setGyroError(TPoint3F(0,0,0));
-    m_ahrs.setOrientation(TQuaternionF::CreateFormAngles(roll * CONVERT_DPS_TO_RAD, pitch* CONVERT_DPS_TO_RAD, yaw* CONVERT_DPS_TO_RAD));
-    m_ahrs.setGyroError(m_settings.gyro_zero_offset);
+    //m_ahrs->setGyroError(TPoint3F(0,0,0));
+    m_ahrs->setOrientation(TQuaternionF::CreateFormAngles(roll * CONVERT_DPS_TO_RAD, pitch* CONVERT_DPS_TO_RAD, yaw* CONVERT_DPS_TO_RAD));
+    m_ahrs->setGyroError(m_settings->gyro_zero_offset);
+}
+
+inline void ChangeRangeFlags(uint8_t& range, const uint8_t& range_count, bool& disable) {
+    if(disable) {
+        disable = false;
+        range = 0;
+        return;
+    }
+    range++;
+    if(range >= range_count) {
+        disable = true;
+        range = 0;
+    }
+}
+
+
+inline void TApplication::onChangeGyroRange() {
+    ChangeRangeFlags(m_settings->gyro_mode, GYRO_RANGE_COUNT, m_settings->disable_gyro);
+    m_device_gyro->begin(m_settings->gyro_mode);
+    if(m_settings->disable_gyro)
+        Serial.print("Gyro disabled");
+    else
+        Serial.print("Gyro range ");
+        Serial.println(m_device_gyro->getRangeDegrees());
+}
+
+
+inline void TApplication::onChangeAccRange() {
+    ChangeRangeFlags(m_settings->acc_mode, ACCEL_RANGE_COUNT, m_settings->disable_acc);
+    m_device_accelmag->begin(m_settings->acc_mode);
+    if(m_settings->disable_acc)
+        Serial.print("Acc disabled");
+    else
+        Serial.print("Acc range ");
+        Serial.println(m_device_accelmag->getRangeG());
 }
 
 
@@ -500,7 +552,7 @@ void TApplication::receiveCmd() {
     if (!Serial.available())
         return;
 
-    byte b = Serial.read();
+    uint8_t b = Serial.read();
     switch (b) {
     case E_CMD_CODE_NONE:
     case E_CMD_CODE_CALIBRATION_STOP:
@@ -521,16 +573,16 @@ void TApplication::receiveCmd() {
         return onCommandCalibrateGyro();
 
     case E_CMD_CODE_SET_MAGNITUDE_OFFSET:
-        ReadVector(m_settings.mag_offset, "Set magnitude offset ");
+        ReadVector(m_settings->mag_offset, "Set magnitude offset ");
         break;
     case E_CMD_CODE_SET_MAGNITUDE_MATRIX:
         return onCommandSetMagnitudeMatrix();
 
     case E_CMD_CODE_SET_ACC_OFFSET:
-        ReadVector(m_settings.acc_zero_offset, "Set accel offset ");
+        ReadVector(m_settings->acc_zero_offset, "Set accel offset ");
         break;
     case E_CMD_CODE_SET_ACC_SCALE:
-        ReadVector(m_settings.acc_scale, "Set accel scale ");
+        ReadVector(m_settings->acc_scale, "Set accel scale ");
         break;
 
     case E_CMD_CODE_SET_GRAVITY_VECTOR:
@@ -539,35 +591,37 @@ void TApplication::receiveCmd() {
     case E_CMD_CODE_SET_YAW_NORTH:
         return onCommandSetMagnitudeVector();
     case E_CMD_CODE_DEFAULT_ORIENTATION:
-        m_settings.sensor_to_frame_orientation = TQuaternionF(1,0,0,0);
+        m_settings->sensor_to_frame_orientation = TQuaternionF(1,0,0,0);
         break;
     case E_CMD_CODE_DEBUG_ACTION:
         return onCommandDebugAction();
 
     case E_CMD_CODE_TOGGLE_PRINT_MODE:
-        ToggleFlag(m_settings.print_mag, "Mag print", false);
+        ToggleFlag(m_settings->print_mag, "Mag print", false);
         break;
 
     case E_CMD_CODE_TOGGLE_GYRO:
-        ToggleFlag(m_settings.disable_gyro, "Gyro", true);
-        m_ahrs.setGyroMeas(m_settings.beta, m_settings.disable_gyro? 0 : m_settings.zeta);
-        m_ahrs.setGyroError( m_settings.disable_gyro ? TPoint3F(0,0,0) : m_settings.gyro_zero_offset) ;
+        //ToggleFlag(m_settings->disable_gyro, "Gyro", true);
+        onChangeGyroRange();
+        m_ahrs->setGyroMeas(m_settings->beta, m_settings->disable_gyro? 0 : m_settings->zeta);
+        m_ahrs->setGyroError( m_settings->disable_gyro ? TPoint3F(0,0,0) : m_settings->gyro_zero_offset) ;
         break;
     case E_CMD_CODE_TOGGLE_ACC:
-        ToggleFlag(m_settings.disable_acc, "Accel", true);
+        onChangeAccRange();
+        //ToggleFlag(m_settings->disable_acc, "Accel", true);
         break;
     case E_CMD_CODE_TOGGLE_MAG:
-        ToggleFlag(m_settings.disable_mag, "Magnit", true);
+        ToggleFlag(m_settings->disable_mag, "Magnit", true);
         break;
 
     case E_CMD_CODE_CHANGE_BETA:
-        ChagneCoef(m_settings.beta);
-        m_ahrs.setGyroMeas(m_settings.beta,m_settings.zeta);
+        ChagneCoef(m_settings->beta);
+        m_ahrs->setGyroMeas(m_settings->beta,m_settings->zeta);
         break;
 
     case E_CMD_CODE_CHANGE_ZETA:
-        ChagneCoef(m_settings.zeta);
-        m_ahrs.setGyroMeas(m_settings.beta,m_settings.zeta);
+        ChagneCoef(m_settings->zeta);
+        m_ahrs->setGyroMeas(m_settings->beta,m_settings->zeta);
         break;
     case E_CMD_CODE_LOAD:
         return onCommandLoad();
@@ -575,9 +629,9 @@ void TApplication::receiveCmd() {
         return onCommandSave();
     case E_CMD_CODE_LOAD_DEFAULT: {
         Serial.println("Load deafult settings. Done.");
-        uint16_t save_cnt = m_settings.m_save_count;
-        m_settings.initDefault();
-        m_settings.m_save_count = save_cnt;
+        uint16_t save_cnt = m_settings->m_save_count;
+        m_settings->initDefault();
+        m_settings->m_save_count = save_cnt;
         onSettingsChanged();
         break;
     }
