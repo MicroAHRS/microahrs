@@ -1,10 +1,6 @@
 HEADERS += \                    
     shared/in_range.hpp \
     shared/max.hpp \    
-    sensor/Adafruit_FXAS21002C.h \
-    sensor/Adafruit_Sensor.h \
-    sensor/Adafruit_FXOS8700.h \            
-    sensor/Adafruit_FXAS21002C_termo.h \    
     shared/Function/TFunction.h \
     shared/Function/TFunctionLine.h \
     shared/Function/TFunction3.h \
@@ -21,16 +17,20 @@ HEADERS += \
     shared/Geometry/TMatrix3F.h \
     TApplication.h \
     ECommandCode.h \
-    EPrintMode.h
+    EPrintMode.h \
+    A_FXOS8700.h \
+    A_FXAS21002C.h \
+    A_FXAS21002C_termo.h \
+    A_Sensor.h
 
 
 SOURCES += \        
     test/test.cpp \
-     sensor/Adafruit_FXAS21002C.cpp \
-     sensor/Adafruit_FXOS8700.cpp \
-     sensor/Adafruit_FXAS21002C_termo.cpp \
      TAHRSMadgwick.cpp \
-    TApplication.cpp
+    TApplication.cpp \
+    A_FXOS8700.cpp \
+    A_FXAS21002C.cpp \
+    A_FXAS21002C_termo.cpp
 
 OTHER_FILES += \
     microahrs.ino

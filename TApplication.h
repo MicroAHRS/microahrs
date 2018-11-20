@@ -5,7 +5,7 @@
 
 #include "shared/Geometry/TPoint3F.h"
 
-#include "Adafruit_Sensor.h"
+#include "A_Sensor.h"
 
 
 
@@ -13,13 +13,14 @@
 // 1.02 поменялись коды комманды
 // 1.03 Reset Pitch Roll с учетом ориентации сенсора
 // 1.04 отправка сырых даных магнитометра
+// 1.05 ускорение фильтра за одну итерацию - при помощи рассчета углов
 
-#define AHRS_VERSION "1.03"
+#define AHRS_VERSION "1.05"
 
 class TAppSettings;
-class Adafruit_FXAS21002C_termo;
-class Adafruit_FXAS21002C;
-class Adafruit_FXOS8700;
+class A_FXAS21002C_termo;
+class A_FXAS21002C;
+class A_FXOS8700;
 class TAHRSMadgwick;
 
 class TApplication
@@ -80,8 +81,8 @@ private:
 
     TAHRSMadgwick*                m_ahrs;
     //Adafruit_FXAS21002C_termo    m_device_gyro;
-    Adafruit_FXAS21002C_termo*    m_device_gyro;
-    Adafruit_FXOS8700*            m_device_accelmag;
+    A_FXAS21002C_termo*    m_device_gyro;
+    A_FXOS8700*            m_device_accelmag;
     TAppSettings*                 m_settings;
 };
 

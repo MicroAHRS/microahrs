@@ -23,7 +23,7 @@
  #include "WProgram.h"
 #endif
 
-#include "Adafruit_Sensor.h"
+#include "A_Sensor.h"
 //#include <Wire.h>
 
 
@@ -59,7 +59,7 @@ enum EFXOS8700Register
 };
 
 #define ACCEL_RANGE_COUNT 3
-class Adafruit_FXOS8700 : public Adafruit_Sensor
+class A_FXOS8700 : public Adafruit_Sensor
 {
 public:
     enum ERange
@@ -76,7 +76,7 @@ public:
       int16_t z;
     };
   public:
-    Adafruit_FXOS8700(int32_t accelSensorID = -1, int32_t magSensorID = -1);
+    A_FXOS8700(int32_t accelSensorID = -1, int32_t magSensorID = -1);
 
     bool begin           (uint8_t rng = ACCEL_RANGE_2G );
     bool getEvent        ( sensors_event_t* accel );   

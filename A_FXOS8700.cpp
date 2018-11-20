@@ -19,7 +19,7 @@
 #include <Wire.h>
 //#include <limits.h>
 
-#include "Adafruit_FXOS8700.h"
+#include "A_FXOS8700.h"
 
 #define ACCEL_MG_LSB_2G (0.000244F)
 #define ACCEL_MG_LSB_4G (0.000488F)
@@ -30,7 +30,7 @@
  PRIVATE FUNCTIONS
  ***************************************************************************/
 
-void Adafruit_FXOS8700::write8(uint8_t reg, uint8_t value)
+void A_FXOS8700::write8(uint8_t reg, uint8_t value)
 {
     Wire.beginTransmission(FXOS8700_ADDRESS);
     Wire.write((uint8_t)reg);
@@ -38,7 +38,7 @@ void Adafruit_FXOS8700::write8(uint8_t reg, uint8_t value)
     Wire.endTransmission();
 }
 
-uint8_t Adafruit_FXOS8700::read8(uint8_t reg)
+uint8_t A_FXOS8700::read8(uint8_t reg)
 {  
     Wire.beginTransmission((uint8_t)FXOS8700_ADDRESS);
 
@@ -50,13 +50,13 @@ uint8_t Adafruit_FXOS8700::read8(uint8_t reg)
     return Wire.read();
 }
 
-Adafruit_FXOS8700::Adafruit_FXOS8700(int32_t accelSensorID, int32_t magSensorID)
+A_FXOS8700::A_FXOS8700(int32_t accelSensorID, int32_t magSensorID)
 {
     m_accel_sensor_id = accelSensorID;
     m_mag_sensor_id = magSensorID;
 }
 
-bool Adafruit_FXOS8700::begin(uint8_t rng)
+bool A_FXOS8700::begin(uint8_t rng)
 {
     /* Enable I2C */
     Wire.begin();
@@ -98,7 +98,7 @@ bool Adafruit_FXOS8700::begin(uint8_t rng)
     @brief  Gets the most recent sensor event
 */
 /**************************************************************************/
-bool Adafruit_FXOS8700::getEvent(sensors_event_t* accelEvent, sensors_event_t* magEvent)
+bool A_FXOS8700::getEvent(sensors_event_t* accelEvent, sensors_event_t* magEvent)
 {
     /* Clear the event */
     memset(accelEvent, 0, sizeof(sensors_event_t));
@@ -166,7 +166,7 @@ bool Adafruit_FXOS8700::getEvent(sensors_event_t* accelEvent, sensors_event_t* m
     return true;
 }
 
-float Adafruit_FXOS8700::getSensivity() const {
+float A_FXOS8700::getSensivity() const {
     switch (m_range) {
     case ACCEL_RANGE_2G:
         return ACCEL_MG_LSB_2G;
@@ -180,7 +180,7 @@ float Adafruit_FXOS8700::getSensivity() const {
 
 /* To keep Adafruit_Sensor happy we need a single sensor interface */
 /* When only one sensor is requested, return accel data */
-bool Adafruit_FXOS8700::getEvent(sensors_event_t* accelEvent)
+bool A_FXOS8700::getEvent(sensors_event_t* accelEvent)
 {
     sensors_event_t mag;
     return getEvent(accelEvent, &mag);

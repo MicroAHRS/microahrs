@@ -17,9 +17,9 @@
 #ifndef __FXAS21002C_H__
 #define __FXAS21002C_H__
 
-#include "Adafruit_Sensor.h"
+#include "A_Sensor.h"
 
-class Adafruit_FXAS21002C : public Adafruit_Sensor
+class A_FXAS21002C : public Adafruit_Sensor
 {
 public:
     // see https://cdn-learn.adafruit.com/assets/assets/000/040/671/original/FXAS21002.pdf?1491475056
@@ -37,7 +37,7 @@ public:
         int16_t z;
     };
 public:
-    Adafruit_FXAS21002C(int32_t sensorID = -1);
+    A_FXAS21002C(int32_t sensorID = -1);
 
     bool begin           ( uint8_t rng = GYRO_RANGE_250DPS );
     bool getEvent        ( sensors_event_t* event);

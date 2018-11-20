@@ -8,8 +8,8 @@
 #include "shared/Function/TFunctionLineF.h"
 #include <EEPROM.h>
 
-#include "Adafruit_FXOS8700.h"
-#include "Adafruit_FXAS21002C.h"
+#include "A_FXOS8700.h"
+#include "A_FXAS21002C.h"
 
 #define SETTINGS_ADDRESS 10
 
@@ -33,8 +33,8 @@ public:
                     TFunctionLineF()
                 );
 
-        acc_mode = Adafruit_FXOS8700::ACCEL_RANGE_4G;
-        gyro_mode = Adafruit_FXAS21002C::GYRO_RANGE_250DPS;
+        acc_mode = A_FXOS8700::ACCEL_RANGE_4G;
+        gyro_mode = A_FXAS21002C::GYRO_RANGE_250DPS;
 
         mag_matrix = TMatrix3F(
                 TPoint3F(  1, 0, 0 ),
@@ -66,7 +66,7 @@ public:
 #ifdef DEVICE_SET_2
         acc_zero_offset = TPoint3F( 0.2368895, -0.3631025, 0.3326025);
         acc_scale = TPoint3F( 1.008551146, 1.005089637, 1.00459703 );
-        gyro_mode = Adafruit_FXAS21002C::GYRO_RANGE_500DPS;
+        gyro_mode = A_FXAS21002C::GYRO_RANGE_500DPS;
         gyro_temperature = TFunction3< TFunctionLineF , float>(
                     TFunctionLineF(32, 1.26462    ,69 ,  1.80386 ), // kx kc
                     TFunctionLineF(32,-0.13643    ,69 ,  0.0376  ),

@@ -9,16 +9,17 @@ float pitch = 0.0;
 float roll = 0.0;
 
 Point3F acc = new Point3F();
-Point3FAvarage acc_avg = new Point3FAvarage(10);
-Point3FAvarage mag_avg = new Point3FAvarage(10);
-Point3FAvarage gerr_avg = new Point3FAvarage(10);
+Point3FAvarage acc_avg = new Point3FAvarage(2);
+Point3FAvarage mag_avg = new Point3FAvarage(2);
+Point3FAvarage gerr_avg = new Point3FAvarage(2);
+AvarageValue gangle_avg = new AvarageValue(10,0);
 
 Point3F gerr = new Point3F();
 Point3F gyro = new Point3F();
 Point3F mag = new Point3F();
 Point3F mag_raw = new Point3F();
 
-boolean boost_at_start = true;
+int boost_at_start = 0;
 
 float temp = 0.0;
 
@@ -141,7 +142,8 @@ void drawTextCommand() {
     text("y - SET_YAW ", x, y+=h );
     text("i - DEFAULT_ORIENTATION ", x, y+=h );
     y+=h/2;
-    text("r - RECORDING START ", x, y+=h );        
+    text("r - RECORDING START ", x, y+=h );
+    text("o - OPEN RECORD ", x, y+=h );    
     y+=h/2;
 
 
@@ -190,7 +192,6 @@ void fileSelected(File selection) {
 
 void keyPressed() {
     println("Key = " + int(key));
-    int keyIndex = -1;  
 
     byte cmd_code = E_CMD_CODE_NONE;
 
@@ -228,27 +229,9 @@ void keyPressed() {
         cmd_code = E_CMD_CODE_TOGGLE_PRINT_MODE;
     if (key == 'o' )
         cmdOpenLog();    
-
-    if (key == 'r' || key == 'R') {      
+    if (key == 'r' || key == 'R')   
         onCmdRecordStart();   
-        return;
-    }
-
-    //if(key == 'k' || key == 'K') {
-    //  cmd_code = E_CMD_CODE_SET_ACC_OFFSET;
-    //  myPort.write(cmd_code);    
-    //  myPort.write("0.00 0.00 0.00");
-    //  //myPort.write("1.00 0.00 0.00 0.00 1.00 0.00 0.00 0.00 1.00");
-    //  return;
-    //}
-
-    //if(key == 'l' || key == 'L') {
-    //  cmd_code = E_CMD_CODE_SET_ACC_OFFSET;
-    //  myPort.write(cmd_code);
-    //  acc.z = 0.6124513;
-    //  myPort.write(acc.x + " " + acc.y + " "+ acc.z); 
-    //  return;
-    //}
+  
 
 
     if (cmd_code != E_CMD_CODE_NONE) {
@@ -399,7 +382,7 @@ void drawCursor(float x, float y, float angle, PImage img, boolean flip, float a
     rotate(radians(-angle));    
     //boolean flip2 = flip? !rev : rev;
     //translate(0, (rev?-1:1)*250 / 2);
-    translate(0, (rev?1:1)*250 / 2);
+    translate(0, (rev?-1:1)*250 / 2);
     fill(128, 128, 128);
     d2 = 16;
     ellipseMode(CENTER);
@@ -461,7 +444,7 @@ void draw()
     fill(200, 200, 200);
     drawGravityIndicator(width*0.5, height*0.5, 0, 40);
     fill(100, 200, 200);
-    drawGravityIndicator(width*0.5, height*0.5, -g_anlge_roll, 20);
+    drawGravityIndicator(width*0.5, height*0.5, gangle_avg.avg(-g_anlge_roll), 20);
     drawTextIface();
 }
 
@@ -566,7 +549,9 @@ boolean onDataMessage(String message, String[] list , boolean from_sensor) {
     }
     if(from_sensor) // temp
         l++;
-    temp = float(list[l++]);
+        
+    if (list.length >= l) 
+        temp = float(list[l++]);
     
     if(from_sensor) // gerr
         l++;
@@ -619,9 +604,10 @@ boolean onDataMessage(String message, String[] list , boolean from_sensor) {
     overload = g / 9.8;
 
 
-    if (boost_at_start) {
-        boost_at_start = false;
-        sendCmdBoost();
+    if (boost_at_start>0) {
+        boost_at_start--;
+        if(boost_at_start == 0)
+            sendCmdBoost();
     }
 
     writeLogger();   

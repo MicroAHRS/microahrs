@@ -19,7 +19,7 @@
 #include <Wire.h>
 //#include <limits.h>
 
-#include "Adafruit_FXAS21002C.h"
+#include "A_FXAS21002C.h"
 
 
 /*=========================================================================
@@ -65,7 +65,7 @@
     @brief  Abstract away platform differences in Arduino wire library
 */
 /**************************************************************************/
-void Adafruit_FXAS21002C::write8(uint8_t reg, uint8_t value)
+void A_FXAS21002C::write8(uint8_t reg, uint8_t value)
 {
   Wire.beginTransmission(FXAS21002C_ADDRESS);
   #if ARDUINO >= 100
@@ -83,7 +83,7 @@ void Adafruit_FXAS21002C::write8(uint8_t reg, uint8_t value)
     @brief  Abstract away platform differences in Arduino wire library
 */
 /**************************************************************************/
-uint8_t Adafruit_FXAS21002C::read8(uint8_t reg)
+uint8_t A_FXAS21002C::read8(uint8_t reg)
 {
   uint8_t value;
 
@@ -104,7 +104,7 @@ uint8_t Adafruit_FXAS21002C::read8(uint8_t reg)
   return value;
 }
 
-float  Adafruit_FXAS21002C::getSensitivity(const Adafruit_FXAS21002C::EGyroRange &range ) {
+float  A_FXAS21002C::getSensitivity(const A_FXAS21002C::EGyroRange &range ) {
     switch(range)
     {
       case GYRO_RANGE_250DPS:
@@ -144,7 +144,7 @@ float  Adafruit_FXAS21002C::getSensitivity(const Adafruit_FXAS21002C::EGyroRange
 //    return 0x0;
 //}
 
-uint16_t Adafruit_FXAS21002C::getRangeDegrees() {
+uint16_t A_FXAS21002C::getRangeDegrees() {
     switch (m_range_code) {
     case  GYRO_RANGE_250DPS:
         return 250;
@@ -167,13 +167,13 @@ uint16_t Adafruit_FXAS21002C::getRangeDegrees() {
     @brief  Instantiates a new Adafruit_FXAS21002C class
 */
 /**************************************************************************/
-Adafruit_FXAS21002C::Adafruit_FXAS21002C(int32_t sensorID) {
+A_FXAS21002C::A_FXAS21002C(int32_t sensorID) {
   m_sensor_id = sensorID;
   m_raw_temperature = 0;
 }
 
 
-bool Adafruit_FXAS21002C::begin(uint8_t rng)
+bool A_FXAS21002C::begin(uint8_t rng)
 {
   /* Enable I2C */
   Wire.begin();
@@ -247,7 +247,7 @@ bool Adafruit_FXAS21002C::begin(uint8_t rng)
     @brief  Gets the most recent sensor event
 */
 /**************************************************************************/
-bool Adafruit_FXAS21002C::getEvent(sensors_event_t* event, sensors_event_t* temp_event)
+bool A_FXAS21002C::getEvent(sensors_event_t* event, sensors_event_t* temp_event)
 {
     //bool readingValid = false;
 
@@ -307,7 +307,7 @@ bool Adafruit_FXAS21002C::getEvent(sensors_event_t* event, sensors_event_t* temp
   return true;
 }
 
-bool Adafruit_FXAS21002C::getEvent(sensors_event_t* event)
+bool A_FXAS21002C::getEvent(sensors_event_t* event)
 {
     return getEvent(event , NULL);
 }

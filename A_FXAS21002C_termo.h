@@ -1,15 +1,15 @@
 #ifndef ADAFRUIT_FXAS21002C_TERMO_H
 #define ADAFRUIT_FXAS21002C_TERMO_H
 
-#include "Adafruit_FXAS21002C.h"
+#include "A_FXAS21002C.h"
 #include "shared/Function/TFunctionLineF.h"
 #include "shared/Function/TFunction3.h"
 
-class Adafruit_FXAS21002C_termo: public Adafruit_FXAS21002C
+class A_FXAS21002C_termo: public A_FXAS21002C
 {
 public:
     typedef TFunction3< TFunctionLineF , float> TFunctionCalibrate;
-    Adafruit_FXAS21002C_termo(int32_t sensorID = -1);
+    A_FXAS21002C_termo(int32_t sensorID = -1);
 
     inline void setCalibrateFunction(const TFunctionCalibrate& f)  { m_gyro_zero_avg = f; }
 

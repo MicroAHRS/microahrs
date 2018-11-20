@@ -7,9 +7,9 @@
 #include "TAppSettings.h"
 
 
-#include "Adafruit_FXOS8700.h"
-#include "Adafruit_FXAS21002C.h"
-#include "Adafruit_FXAS21002C_termo.h"
+#include "A_FXOS8700.h"
+#include "A_FXAS21002C.h"
+#include "A_FXAS21002C_termo.h"
 
 
 #include "Arduino.h"
@@ -75,8 +75,8 @@ bool TApplication::init()
 
     m_ahrs = new TAHRSMadgwick();
     m_settings = new TAppSettings();
-    m_device_gyro = new Adafruit_FXAS21002C_termo(0x0021002C);
-    m_device_accelmag = new Adafruit_FXOS8700(0x8700A, 0x8700B);
+    m_device_gyro = new A_FXAS21002C_termo(0x0021002C);
+    m_device_accelmag = new A_FXOS8700(0x8700A, 0x8700B);
 
     onCommandLoad();
 
@@ -97,10 +97,8 @@ bool TApplication::init()
     if(m_settings->m_save_count == 0)
         return true;
 
-    delay(100);
-    //updateDevices();
-    //onCommandBoostFilter();
-
+    delay(100);    
+    onCommandBoostFilter();
     Serial.print("Welcome! AHRS Ver ");
     Serial.println(AHRS_VERSION);
 
@@ -110,6 +108,8 @@ bool TApplication::init()
 
 
 inline TPoint3F TApplication::getMagn() {
+    if(m_settings->disable_mag )
+        return TPoint3F();
     TPoint3F mag_vec = VectorFromEvent(mag_event.magnetic) - m_settings->mag_offset;
     return m_settings->mag_matrix * mag_vec;
 }
@@ -402,32 +402,39 @@ void TApplication::onCommandSetMagnitudeMatrix() {
     }
     Serial.println();
 }
-#define BETA_START 100
-#define BETA_END 1
-void TApplication::onCommandBoostFilter() {
-    Serial.println("Boost");
-    //ускорить фильтр - чтобы выровнить ориентацию    
-
-    float dt = 0.01;
-    unsigned long MAX_I = 500;
-    for(unsigned long i = 0;i < MAX_I;i++) {
-        if(i%10 == 0) {
-            float progress = GetProgressSection(i , 0, MAX_I);
-            float beta = Lerp(progress, BETA_START, BETA_END);       
-            m_ahrs->setGyroMeas(beta,0);
-        }
-
-        updateDevices();
-        TPoint3F gyr(0,0,0);
-        TPoint3F acc = getAcc();
-        TPoint3F mag = m_settings->disable_mag ? TPoint3F() : getMagn();
-        m_ahrs->update(gyr,acc,mag, dt);
-        if(i%20 == 0)
-            printOut();
+#define BETA_START 1
+#define BETA_END 0
+void TApplication::onCommandBoostFilter() {    
+    //ускорить фильтр - чтобы выровнить ориентацию
+    updateDevices();
+    TPoint3F acc = getAcc();
+    TPoint3F mag = getMagn();
+    TPoint3F angles = m_ahrs->getAngles();
+    angles.x  = atan2( acc.y, acc.z);
+    angles.y  = -atan2( acc.x, acc.z);
+    if(!m_settings->disable_mag) {
+        TQuaternionF q = TQuaternionF::CreateFormAngles(angles.x, angles.y, 0);
+        mag = q.getConjugate().rotateVector(mag);
+        angles.z  = -atan2( mag.y, mag.x);
     }
 
+    m_ahrs->setOrientation(TQuaternionF::CreateFormAngles(angles.x, angles.y, angles.z));
+
+    float dt = 0.01;
+    unsigned long MAX_I = 50;
+    for(unsigned long i = 0;i < MAX_I;i++) {
+
+        float progress = GetProgressSection(i , 0, MAX_I);
+        float beta = Lerp(progress, BETA_START, BETA_END);
+        m_ahrs->setGyroMeas(beta,0);
+
+        updateDevices();
+        TPoint3F gyr = getGyro();
+        acc = getAcc();
+        mag = getMagn();
+        m_ahrs->update(gyr,acc,mag, dt);
+    }
     m_ahrs->setGyroMeas(m_settings->beta,m_settings->zeta);
-    Serial.println(MSG_DONE);
 }
 
 void TApplication::onSettingsChanged() {
@@ -587,6 +594,7 @@ void TApplication::receiveCmd() {
         return onCommandSetPitchRollByAcc();
 
     case E_CMD_CODE_BOOST_FILTER:
+        Serial.println("Boost");
         return onCommandBoostFilter();
 
     case E_CMD_CODE_CALIBRATE_GYRO:

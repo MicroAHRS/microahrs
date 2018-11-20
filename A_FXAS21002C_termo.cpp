@@ -1,19 +1,19 @@
-#include "Adafruit_FXAS21002C_termo.h"
+#include "A_FXAS21002C_termo.h"
 #include "shared/Geometry/TPoint3F.h"
 
-Adafruit_FXAS21002C_termo::Adafruit_FXAS21002C_termo(int32_t sensorID)
-    :Adafruit_FXAS21002C(sensorID)
+A_FXAS21002C_termo::A_FXAS21002C_termo(int32_t sensorID)
+    :A_FXAS21002C(sensorID)
 {
     m_enable_conpensation = true;
 
 }
 
-bool Adafruit_FXAS21002C_termo::getEvent( sensors_event_t* gyro_event, sensors_event_t *temp_event )
+bool A_FXAS21002C_termo::getEvent( sensors_event_t* gyro_event, sensors_event_t *temp_event )
 {    
     if(!temp_event)
         return false;
 
-    if(!Adafruit_FXAS21002C::getEvent(gyro_event, temp_event))
+    if(!A_FXAS21002C::getEvent(gyro_event, temp_event))
         return false;
 
     if(!m_enable_conpensation)
