@@ -2,11 +2,14 @@
 
 #include "ECommandCode.h"
 
-#include <Adafruit_FXOS8700.h>
+
 #include "TAHRSMadgwick.h"
 #include "TAppSettings.h"
-#include <Adafruit_FXAS21002C.h>
-#include <Adafruit_FXAS21002C_termo.h>
+
+
+#include "Adafruit_FXOS8700.h"
+#include "Adafruit_FXAS21002C.h"
+#include "Adafruit_FXAS21002C_termo.h"
 
 
 #include "Arduino.h"
