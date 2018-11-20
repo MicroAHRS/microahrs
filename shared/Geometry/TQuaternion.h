@@ -41,6 +41,7 @@ public:
                 w * q.z + x * q.y - y * q.x + z * q.w );
         return *this;
     }
+    static TQuaternion<T> Identity() {return TQuaternion<T>(1,0,0,0);}
 
     inline TQuaternion<T> operator * ( const T& f) const { return TQuaternion<T>(w*f,x*f,y*f,z*f); }
     inline TQuaternion<T> operator / ( const T& f) const { return TQuaternion<T>(w/f,x/f,y/f,z/f); }

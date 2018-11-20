@@ -11,7 +11,6 @@
 
 #include "Arduino.h"
 
-#define AHRS_VERSION "1.02"
 #define FLOAT_ACCURENCY 1000000.f
 
 const char* MSG_MAGNIT = "Mag";
@@ -20,10 +19,8 @@ const char* MSG_GYRO = "Gyro";
 const char* MSG_DONE = "Done";
 const char* MSG_SUCCESS = "success";
 const char* MSG_FAIL   = "FAIL";
-
-TApplication::TApplication()
-   //m_device_gyro( Adafruit_FXAS21002C_termo(0x0021002C) ),
-
+const float FLOAT_FACKTOR = 1000;
+TApplication::TApplication()   
 {
     m_temperature = 0;
     m_print_out_timer = 0;
@@ -47,6 +44,14 @@ void PrintVector(const TPoint3F& vec) {
     Serial.print(" ");
 }
 
+//void PrintVectorI(const TPoint3F& vec) {
+//    Serial.print(int(vec.x));
+//    Serial.print(" ");
+//    Serial.print(int(vec.y));
+//    Serial.print(" ");
+//    Serial.print(int(vec.z));
+//    Serial.print(" ");
+//}
 void PrintQuaternion(const TQuaternionF& q) {
     Serial.print(q.w);
     Serial.print(" ");
@@ -237,23 +242,27 @@ void TApplication::printOut() {
 //    Serial.println(acc.y * FLOAT_ACCURENCY);
 //    Serial.println(acc.z * FLOAT_ACCURENCY);
 
-    float temp = getTemperature();
+    float temp = getTemperature();    
     Serial.print("t: ");
     Serial.print(int(temp));
 
     if(m_settings->print_mag) {
+        TPoint3F mag_raw = VectorFromEvent(mag_event.magnetic);
         Serial.print(" gerr: ");
-        PrintVector(m_ahrs->m_gyro_error * CONVERT_RAD_TO_DPS * 1000);
+        PrintVector(m_ahrs->m_gyro_error * CONVERT_RAD_TO_DPS * FLOAT_FACKTOR);
 
-        Serial.print(m_ahrs->beta * 1000 * CONVERT_RAD_TO_DPS / 0.866025404);
+        Serial.print(m_ahrs->beta * FLOAT_FACKTOR * CONVERT_RAD_TO_DPS / 0.866025404);
         Serial.print(" ");
-        Serial.print(m_ahrs->zeta * 1000 * CONVERT_RAD_TO_DPS / 0.866025404);
+        Serial.print(m_ahrs->zeta * FLOAT_FACKTOR * CONVERT_RAD_TO_DPS / 0.866025404);
         Serial.print(" ");
         Serial.print("mag: ");
         TPoint3F mag = getMagn();
         PrintVector(mag);
         Serial.print("fps: ");
         Serial.print(m_fps);
+
+        Serial.print(" mag_raw: ");
+        PrintVector(mag_raw * FLOAT_FACKTOR );
     }
     Serial.println();
 
@@ -283,7 +292,8 @@ float GetDeltaTime(unsigned long& last_time, float min_dt)
 void TApplication::onCommandResetPitchRoll() {
     //Serial.println("Reset pitch and roll");
     TPoint3F angles = m_ahrs->getAngles();
-    m_ahrs->setOrientation(TQuaternionF::CreateFormAngles(0,0,angles.z));
+    TPoint3F angles_def = m_settings->sensor_to_frame_orientation.getAngles();
+    m_ahrs->setOrientation(TQuaternionF::CreateFormAngles(-angles_def.x,-angles_def.y,angles.z));
 }
 
 void TApplication::onCommandSetYawByMag() {       
@@ -313,7 +323,7 @@ void TApplication::onCommandSetMagnitudeVector() {
 void TApplication::onCommandCalibrateGyro()
 {
     TQuaternionF q = m_ahrs->m_q;
-    CalibrateGyroStep1(30);
+    CalibrateGyroStep1(15);
 
     m_ahrs->setOrientation(q);
     m_ahrs->setGyroError(m_settings->gyro_zero_offset);
@@ -337,7 +347,8 @@ void TApplication::CalibrateGyroCycle(float beta_start, float beta_end, float ma
         if(dt == 0)
             continue;
         time += dt;
-        if(time > 5 && time - last_print_time > 1) {
+        if(time - last_print_time > 1) {
+            Serial.print("Calibrate ");
             Serial.println(int(max_time - time));
             last_print_time = time;
         }
@@ -353,11 +364,10 @@ void TApplication::CalibrateGyroCycle(float beta_start, float beta_end, float ma
 }
 
 void TApplication::CalibrateGyroStep1(float max_time)
-{                    
-    Serial.println("Dont move 30 seconds!");
-    m_ahrs->setOrientation(TQuaternionF(1.0f, 0.0, 0.0, 0.0));
+{                        
+    m_ahrs->setOrientation(TQuaternionF::Identity());
 
-    CalibrateGyroCycle(1, 0.01, max_time);
+    CalibrateGyroCycle(1, 0, max_time);
 
     m_settings->gyro_zero_offset = m_ahrs->m_gyro_error;
 
@@ -407,7 +417,7 @@ void TApplication::onCommandBoostFilter() {
         updateDevices();
         TPoint3F gyr(0,0,0);
         TPoint3F acc = getAcc();
-        TPoint3F mag = getMagn();
+        TPoint3F mag = m_settings->disable_mag ? TPoint3F() : getMagn();
         m_ahrs->update(gyr,acc,mag, dt);
         if(i%20 == 0)
             printOut();
@@ -610,7 +620,7 @@ void TApplication::receiveCmd() {
         //ToggleFlag(m_settings->disable_gyro, "Gyro", true);
         onChangeGyroRange();
         m_ahrs->setGyroMeas(m_settings->beta, m_settings->disable_gyro? 0 : m_settings->zeta);
-        m_ahrs->setGyroError( m_settings->disable_gyro ? TPoint3F(0,0,0) : m_settings->gyro_zero_offset) ;
+        m_ahrs->setGyroError( m_settings->disable_gyro ? TPoint3F() : m_settings->gyro_zero_offset) ;
         break;
     case E_CMD_CODE_TOGGLE_ACC:
         //onChangeAccRange();

@@ -8,19 +8,17 @@ float yaw = 0.0;
 float pitch = 0.0;
 float roll = 0.0;
 
+Point3F acc = new Point3F();
+Point3FAvarage acc_avg = new Point3FAvarage(10);
+Point3FAvarage mag_avg = new Point3FAvarage(10);
+Point3FAvarage gerr_avg = new Point3FAvarage(10);
 
-float accx = 0.0;
-float accy = 0.0;
-float accz = 0.0;
+Point3F gerr = new Point3F();
+Point3F gyro = new Point3F();
+Point3F mag = new Point3F();
+Point3F mag_raw = new Point3F();
 
-float gerrx = 0.0;
-float gerry = 0.0;
-float gerrz = 0.0;
-
-
-float magx = 0.0;
-float magy = 0.0;
-float magz = 0.0;
+boolean boost_at_start = true;
 
 float temp = 0.0;
 
@@ -39,8 +37,13 @@ float overload=0;
 
 float fps= 0;
 
+String time;
+
 PrintWriter logger;
 boolean logger_first_line = false;
+
+BufferedReader log_reader;
+
 
 byte
     E_CMD_CODE_NONE = 0, 
@@ -145,7 +148,8 @@ void drawTextCommand() {
     //text("r - E_CMD_CODE_LOAD_DEFAULT ", x, y+=h );
 }
 
-void showMessage(String message) {
+void showMessage(String message) 
+{
     last_message = message;
     last_message_timer = last_message_time_max;
 }
@@ -165,6 +169,23 @@ void onCmdRecordStart() {
     showMessage("Record start");
     logger = createWriter("logs/log_"+formatter.format(d)+".csv");
     logger_first_line = true;
+}
+
+void sendCmdBoost() {
+    myPort.write(E_CMD_CODE_BOOST_FILTER);
+}
+
+void cmdOpenLog() {
+    selectInput("Select a file to process:", "fileSelected");
+}
+
+void fileSelected(File selection) {
+    if (selection == null) {
+        log_reader = null;
+        return;
+    }
+
+    log_reader = createReader(selection.getAbsolutePath());
 }
 
 void keyPressed() {
@@ -203,8 +224,10 @@ void keyPressed() {
         cmd_code = E_CMD_CODE_SET_GRAVITY_VECTOR;
     if (key == 'i' || key == 'I')  // pitch
         cmd_code = E_CMD_CODE_DEFAULT_ORIENTATION;
-    if(key == 'v' )
-        cmd_code = E_CMD_CODE_TOGGLE_PRINT_MODE;    
+    if (key == 'v' )
+        cmd_code = E_CMD_CODE_TOGGLE_PRINT_MODE;
+    if (key == 'o' )
+        cmdOpenLog();    
 
     if (key == 'r' || key == 'R') {      
         onCmdRecordStart();   
@@ -222,8 +245,8 @@ void keyPressed() {
     //if(key == 'l' || key == 'L') {
     //  cmd_code = E_CMD_CODE_SET_ACC_OFFSET;
     //  myPort.write(cmd_code);
-    //  accz = 0.6124513;
-    //  myPort.write(accx + " " + accy + " "+ accz); 
+    //  acc.z = 0.6124513;
+    //  myPort.write(acc.x + " " + acc.y + " "+ acc.z); 
     //  return;
     //}
 
@@ -301,9 +324,9 @@ void drawTextIface() {
 
     textSize(24);
     fill(100, 0, 100);
-    text("roll err  " + nf(gerrx, 1, 5), x, y+=30);     
-    text("pitch err " + nf(gerry, 1, 5), x, y+=24);    
-    text("yaw err   " + nf(gerrz, 1, 5), x, y+=24);
+    text("roll err  " + nf(gerr.x, 1, 5), x, y+=30);     
+    text("pitch err " + nf(gerr.y, 1, 5), x, y+=24);    
+    text("yaw err   " + nf(gerr.z, 1, 5), x, y+=24);
 
     y+=24;
     fill(100, 100, 0);
@@ -315,18 +338,18 @@ void drawTextIface() {
     y = 0;
     textSize(32);
     fill(100, 100, 100);
-    text("magx " + magx, x, y+=30); 
+    text("mag.x " + mag_raw.x, x, y+=30); 
     //fill(0, 100, 0);
-    text("magy " + magy, x, y+=30);
+    text("mag.y " + mag_raw.y, x, y+=30);
     //fill(0, 0, 100);
-    text("magz " + magz, x, y+=30);
+    text("mag.z " + mag_raw.z, x, y+=30);
 
     fill(100, 100, 100);
-    text("accx " + accx, x, y+=30); 
+    text("acc.x " + acc.x, x, y+=30); 
     //fill(0, 100, 0);
-    text("accy " + accy, x, y+=30);
+    text("acc.y " + acc.y, x, y+=30);
     //fill(0, 0, 100);
-    text("accz " + accz, x, y+=30);
+    text("acc.z " + acc.z, x, y+=30);
 
 
     fill(100, 100, 0);
@@ -338,11 +361,8 @@ void drawTextIface() {
     y = 0;
     fill(100, 0, 0);
     text("temp " + temp, x, y+=30);
-    text("fps " + fps, x, y+=30);
-
-    DateFormat formatter = new SimpleDateFormat("HH:mm:ss");
-    Date d = new Date();    
-    text("time " + formatter.format(d), x, y+=30);    
+    text("fps " + fps, x, y+=30);     
+    text("time " + time, x, y+=30);    
 
     drawTextCommand();
 
@@ -371,14 +391,32 @@ void drawCursor(float x, float y, float angle, PImage img, boolean flip, float a
         scale(1, -1);
     image(img, -w2, -h2);  
 
+    float d2;
+    //draw aim backgroud
+    pushMatrix(); // begin aim indicator  
+    if (flip)
+        scale(1, -1);
+    rotate(radians(-angle));    
+    //boolean flip2 = flip? !rev : rev;
+    //translate(0, (rev?-1:1)*250 / 2);
+    translate(0, (rev?1:1)*250 / 2);
+    fill(128, 128, 128);
+    d2 = 16;
+    ellipseMode(CENTER);
+    ellipse(0, 0, d2, d2);   
+    popMatrix(); // end of object
+
+    //draw aim
     pushMatrix(); // begin aim indicator  
     rotate(radians(-anlge_aim));
     translate(0, (rev?-1:1)*250 / 2);
     fill(128, 255, 128);
-    float d2 = 10;
+    d2 = 10;
     ellipseMode(CENTER);
     ellipse(0, 0, d2, d2);   
     popMatrix(); // end of object 
+
+
 
     popMatrix(); // end of object
 
@@ -405,6 +443,7 @@ void drawGravityIndicator(float x, float y, float angle, float d)
 void draw()
 {
     serialEvent();  // read and parse incoming serial message
+    readLogEvent();
     background(255); // set background to white
     lights();
 
@@ -423,11 +462,6 @@ void draw()
     drawGravityIndicator(width*0.5, height*0.5, 0, 40);
     fill(100, 200, 200);
     drawGravityIndicator(width*0.5, height*0.5, -g_anlge_roll, 20);
-
-
-    //line(mouseX-66, mouseY, mouseX+66, mouseY);
-    //line(mouseX, mouseY-66, mouseX, mouseY+66);
-
     drawTextIface();
 }
 
@@ -453,19 +487,151 @@ Matrix getPitchMatrix(float a)
 
 
 void RotateMag() {
-    double[][] d = {{magx, magy, magz}};
+    double[][] d = {{mag.x, mag.y, mag.z}};
     Matrix mag_m = new Matrix(d);
 
     //Matrix m = getPitchMatrix(radians(pitch)).times(getRollMatrix(radians(roll)));
     Matrix m = getRollMatrix(radians(-roll)).times(getPitchMatrix(radians(pitch)));
     Matrix r = mag_m.times(m);
-    magx = (float)r.data[0][0];
-    magy = (float)r.data[0][1];
-    magz = (float)r.data[0][2];
+    mag.x = (float)r.data[0][0];
+    mag.y = (float)r.data[0][1];
+    mag.z = (float)r.data[0][2];
+}
+
+
+void writeLogger() {
+
+    if (logger==null)
+        return;
+
+    if (logger_first_line) {
+        logger.println("time, timestamp,roll,pitch,yaw,acc.x,acc.y,acc.z ,temp ,gerr.x,gerr.y ,gerr.z,beta,zeta,mag.x,mag.y,mag.z, fps, ,mag_raw.x,mag_raw.y,mag_raw.z,g ,g_anlge_roll ,g_angle_pitch,mag_angle_yaw");
+        logger_first_line = false;
+    }
+
+    DateFormat formatter = new SimpleDateFormat("yyyy-MM-dd_HH_mm_ss");
+    Date d = new Date();                          
+    logger.println( formatter.format(d) + "," + d.getTime() / 1000
+        + "," + roll + "," + pitch + "," + yaw  
+        + "," + acc.x + "," + acc.y + "," + acc.z 
+        + "," + temp 
+        + "," + gerr.x + "," + gerr.y  + "," + gerr.z
+        + "," + beta + "," + zeta          
+        + "," + mag.x + "," + mag.y  + "," + mag.z          
+        + "," + fps
+        + "," + mag_raw.x + "," + mag_raw.y  + "," + mag_raw.z
+        + "," + g 
+        + "," + g_anlge_roll  + "," + g_angle_pitch + "," + mag_angle_yaw           
+        );
+}
+
+boolean onDataMessage(String message, String[] list , boolean from_sensor) {
+    if (list.length <= 4)
+        return false;
+        
+    if(from_sensor && !list[0].equals("Orient:"))
+        return false;
+        
+    float FLOAT_FACKTOR = from_sensor ? 1000 : 1;
+    int l = 0;
+    if(from_sensor)
+        l++; 
+    
+    if(from_sensor) {
+        DateFormat formatter = new SimpleDateFormat("HH:mm:ss");
+        Date d = new Date();    
+        time = formatter.format(d);
+    }
+
+    if (list.length >= l+3) {
+        roll   = float(list[l++]); // convert to float roll
+        pitch  = float(list[l++]); // convert to float pitch
+        yaw    = float(list[l++]) ; // convert to float yaw
+    }
+    
+    if(from_sensor) {
+        //roll  *= -1;
+        pitch *= -1;
+        yaw   *= -1;
+    }else {
+        yaw   *= -1;
+    }
+    
+    if(from_sensor)  // acc
+        l++;
+    if (list.length >= l+3) {
+        acc.x = float(list[l++]) ; 
+        acc.y = float(list[l++]) ; 
+        acc.z = float(list[l++]) ;
+    }
+    if(from_sensor) // temp
+        l++;
+    temp = float(list[l++]);
+    
+    if(from_sensor) // gerr
+        l++;
+    if (list.length >= l+3) {    
+        gerr.x = float(list[l++]) / FLOAT_FACKTOR;
+        gerr.y = float(list[l++]) / FLOAT_FACKTOR;
+        gerr.z = float(list[l++]) / FLOAT_FACKTOR;
+    }
+
+    if (list.length >= l+2) {
+        beta = float(list[l++]) / FLOAT_FACKTOR;
+        zeta = float(list[l++]) / FLOAT_FACKTOR;
+    }
+    
+    if(from_sensor)  // mag
+        l++;
+    if (list.length >= l+3) {
+        mag.x = float(list[l++]) ; 
+        mag.y = float(list[l++]) ; 
+        mag.z = float(list[l++]) ;
+    }
+
+    if(from_sensor)
+        l++;
+    if (list.length >= l) 
+        fps = float(list[l++]) ;     
+
+    if(from_sensor)
+        l++;
+    if (list.length >= l+3) {        
+        mag_raw.x = float(list[l++]) / FLOAT_FACKTOR;
+        mag_raw.y = float(list[l++]) / FLOAT_FACKTOR;
+        mag_raw.z = float(list[l++]) / FLOAT_FACKTOR;
+    }
+
+    if (yaw <0)
+        yaw += 360;
+
+
+    acc = acc_avg.avg(acc);
+    mag = mag_avg.avg(mag);
+    gerr = gerr_avg.avg(gerr);
+
+    g= acc.len();
+    g_anlge_roll = degrees(atan2( acc.y, acc.z));
+    g_angle_pitch = degrees(atan2( acc.x, acc.z));
+
+    RotateMag();
+    mag_angle_yaw = degrees(atan2( mag.y, mag.x));
+    overload = g / 9.8;
+
+
+    if (boost_at_start) {
+        boost_at_start = false;
+        sendCmdBoost();
+    }
+
+    writeLogger();   
+    return true;
 }
 
 void serialEvent()
 {
+    if(myPort == null)
+        return;
     int newLine = 13; // new line character in ASCII
     String message;
     do {
@@ -475,75 +641,39 @@ void serialEvent()
 
         message = trim(message);
         String[] list = split(message, " ");
-        if (list.length > 15 && list[0].equals("Orient:")) {               
-            roll   = float(list[1]); // convert to float roll
-            pitch  = -float(list[2]); // convert to float pitch
-            yaw    = -float(list[3]) ; // convert to float yaw
 
-            accx = float(list[5]) ; 
-            accy = float(list[6]) ; 
-            accz = float(list[7]) ; 
-
-            temp = float(list[9]);
-
-            gerrx = float(list[11]) / 1000;
-            gerry = float(list[12]) / 1000;
-            gerrz = float(list[13]) / 1000;
-
-            beta = float(list[14]) / 1000;
-            zeta = float(list[15]) / 1000;
-
-            if (list.length > 19) {
-                magx = float(list[17]) ; 
-                magy = float(list[18]) ; 
-                magz = float(list[19]) ;
-            }
-
-            if (list.length > 21) 
-                fps = float(list[21]) ;     
-
-            if (yaw <0)
-                yaw += 360;
-
-            g= sqrt(accx*accx + accy*accy + accz*accz);
-            g_anlge_roll = degrees(atan2( accy, accz));
-            g_angle_pitch = degrees(atan2( accx, accz));
-
-            //rotate mag by roll
-            //rotate mag by pitch
-
-            RotateMag();
-
-            mag_angle_yaw = degrees(atan2( magy, magx));
-
-            overload = g / 9.8;
-
-
-            if (logger!=null) {
-                if (logger_first_line) {
-                    logger.println("time, timestamp,roll,pitch,yaw,accx,accy,accz ,temp ,gerrx,gerry ,gerrz,beta,zeta ,magx,magy ,magz,g ,g_anlge_roll ,g_angle_pitch,mag_angle_yaw");
-                    logger_first_line = false;
-                }
-                DateFormat formatter = new SimpleDateFormat("yyyy-MM-dd_HH:mm:ss");
-                Date d = new Date();                          
-                logger.println( formatter.format(d) + "," + d.getTime() / 1000
-                    + "," + roll + "," + pitch + "," + yaw  
-                    + "," + accx + "," + accy + "," + accz 
-                    + "," + temp 
-                    + "," + gerrx + "," + gerry  + "," + gerrz
-                    + "," + beta + "," + zeta          
-                    + "," + magx + "," + magy  + "," + magz          
-                    + "," + g 
-                    + "," + g_anlge_roll  + "," + g_angle_pitch + "," + mag_angle_yaw                              
-                    );
-            }
+        if (onDataMessage(message, list, true)) {
+            
             continue;
-        } 
-
-        if (message.length() > 0  ) {
-            last_message = message;
-            last_message_timer = last_message_time_max;
         }
+
+
+        if (message.length() > 0  ) 
+            showMessage(message);        
         println(message);
     } while (true);
+}
+
+void readLogEvent() {
+    if (log_reader == null)
+        return;
+    try {
+        String message = log_reader.readLine();
+        message = log_reader.readLine();
+
+        if (message == null) {
+            log_reader.close();
+            log_reader = null;
+            showMessage("Finished"); 
+            return;
+        }
+        //print(message);
+        String[] list = split(message, ",");
+        time = list[0];
+        String[] list2 = subset(list, 2);        
+        onDataMessage(message, list2, false);
+    } 
+    catch (IOException e) {
+        e.printStackTrace();
+    }
 }

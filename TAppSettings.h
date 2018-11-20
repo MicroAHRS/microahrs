@@ -13,7 +13,7 @@
 
 #define SETTINGS_ADDRESS 10
 
-#define PRINTOUT_TIME_MS 50
+#define PRINTOUT_TIME_MS 100
 
 //#define DEVICE_SET_ALL
 //#define DEVICE_SET_1
@@ -44,6 +44,15 @@ public:
         mag_offset = TPoint3F( 0, 0, 0);
         gyro_zero_offset = TPoint3F(0, 0, 0 );
 
+        beta       = 0.04;
+        zeta       = 0.004;
+        disable_gyro = false;
+        disable_acc  = false;
+        disable_mag  = false;
+        print_mag    = true;
+        pitch_max = 250;
+        roll_max = 150;
+
 #ifdef DEVICE_SET_1
         acc_zero_offset = TPoint3F( 0.3253305, -0.3593825, 0.6124513);
         acc_scale = TPoint3F( 1.01591586, 0.9863349377, 1.017566665 );
@@ -55,25 +64,24 @@ public:
         mag_offset = TPoint3F( 19.07, 16.78 - 0.25, 63.38 - 0.25);
 #endif
 #ifdef DEVICE_SET_2
-        acc_zero_offset = TPoint3F( 0.2368895, -0.3661025, 0.3326025);
+        acc_zero_offset = TPoint3F( 0.2368895, -0.3631025, 0.3326025);
         acc_scale = TPoint3F( 1.008551146, 1.005089637, 1.00459703 );
-        gyro_mode = Adafruit_FXAS21002C::GYRO_RANGE_2000DPS;
-
+        gyro_mode = Adafruit_FXAS21002C::GYRO_RANGE_500DPS;
+        gyro_temperature = TFunction3< TFunctionLineF , float>(
+                    TFunctionLineF(32, 1.26462    ,69 ,  1.80386 ), // kx kc
+                    TFunctionLineF(32,-0.13643    ,69 ,  0.0376  ),
+                    TFunctionLineF(32,-0.14466001 ,69 , -0.18477 )
+                );
         mag_matrix = TMatrix3F(
                 TPoint3F(  1.001, 0.026, 0.003 ),
                 TPoint3F(  0.026, 0.9999, 0.001 ),
                 TPoint3F(  0.003, 0.001, 1.001 )
         );
         mag_offset = TPoint3F( -72.49,-87.58, 66.34);
+        beta       = 0.016;
+        zeta       = 0.004;
+        disable_mag  = true;
 #endif
-
-        beta       = 0.05;
-        zeta       = beta * 0.1;
-
-        disable_gyro = false;
-        disable_acc  = false;
-        disable_mag  = false;
-        print_mag    = true;
 
         float gravity_delta    = 9.8 * 0.2;
         acc_max_length_sq      = 9.8 + gravity_delta;
@@ -81,8 +89,6 @@ public:
         acc_max_length_sq     *= acc_max_length_sq;
         acc_min_length_sq     *= acc_min_length_sq; // square
 
-        pitch_max = 250;
-        roll_max = 150;
 
         sensor_to_frame_orientation = TQuaternionF(1,0,0,0);
 

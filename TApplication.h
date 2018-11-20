@@ -8,6 +8,14 @@
 #include "Adafruit_Sensor.h"
 
 
+
+// 1.01
+// 1.02 поменялись коды комманды
+// 1.03 Reset Pitch Roll с учетом ориентации сенсора
+// 1.04 отправка сырых даных магнитометра
+
+#define AHRS_VERSION "1.03"
+
 class TAppSettings;
 class Adafruit_FXAS21002C_termo;
 class Adafruit_FXAS21002C;
