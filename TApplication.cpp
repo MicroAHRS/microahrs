@@ -2,7 +2,6 @@
 
 #include "ECommandCode.h"
 
-
 #include "TAHRSMadgwick.h"
 #include "TAppSettings.h"
 
@@ -11,11 +10,9 @@
 #include "A_FXAS21002C.h"
 #include "A_FXAS21002C_termo.h"
 
-
 #include "Arduino.h"
 
-#define FLOAT_ACCURENCY 1000000.f
-
+const char* MSG_SPACE = " ";
 const char* MSG_MAGNIT = "Mag";
 const char* MSG_ACCEL = "Acc";
 const char* MSG_GYRO = "Gyro";
@@ -23,6 +20,8 @@ const char* MSG_DONE = "Done";
 const char* MSG_SUCCESS = "success";
 const char* MSG_FAIL   = "FAIL";
 const float FLOAT_FACKTOR = 1000;
+const float FLAOT_FACKTOR_READ = 1000000.f;
+
 TApplication::TApplication()   
 {
     m_temperature = 0;
@@ -40,11 +39,11 @@ inline TPoint3F VectorFromEvent(sensors_vec_t vec ) {
 
 void PrintVector(const TPoint3F& vec) {
     Serial.print(vec.x);
-    Serial.print(" ");
+    Serial.print(MSG_SPACE);
     Serial.print(vec.y);
-    Serial.print(" ");
+    Serial.print(MSG_SPACE);
     Serial.print(vec.z);
-    Serial.print(" ");
+    Serial.print(MSG_SPACE);
 }
 
 //void PrintVectorI(const TPoint3F& vec) {
@@ -57,16 +56,19 @@ void PrintVector(const TPoint3F& vec) {
 //}
 void PrintQuaternion(const TQuaternionF& q) {
     Serial.print(q.w);
-    Serial.print(" ");
+    Serial.print(MSG_SPACE);
     Serial.print(q.x);
-    Serial.print(" ");
+    Serial.print(MSG_SPACE);
     Serial.print(q.y);
-    Serial.print(" ");
+    Serial.print(MSG_SPACE);
     Serial.print(q.z);
-    Serial.print(" ");
+    Serial.print(MSG_SPACE);
 }
 
-
+//static TAHRSMadgwick ahrs;
+//static TAppSettings settings;
+//static A_FXAS21002C_termo gyro(0x0021002C);
+//static A_FXOS8700 accmag(0x8700A, 0x8700B);
 
 bool TApplication::init()
 {
@@ -75,53 +77,51 @@ bool TApplication::init()
 
     m_ahrs = new TAHRSMadgwick();
     m_settings = new TAppSettings();
-    m_device_gyro = new A_FXAS21002C_termo(0x0021002C);
-    m_device_accelmag = new A_FXOS8700(0x8700A, 0x8700B);
+    m_device_gyro = new A_FXAS21002C_termo(/*0x0021002C*/);
+    m_device_accelmag = new A_FXOS8700(/*0x8700A, 0x8700B*/);
 
     onCommandLoad();
 
     // Initialize the sensors.
     if(!m_device_gyro->begin(m_settings->gyro_mode)) {
-        Serial.println("Ooops, no gyro detected ... Check your wiring!");
+        Serial.print(MSG_GYRO);
+        Serial.println(MSG_FAIL);
         return false;
     }
 
     if(!m_device_accelmag->begin(m_settings->acc_mode)) {
-    //if(!m_device_accelmag->begin(Adafruit_FXOS8700::ACCEL_RANGE_4G)) {
-        Serial.println("Ooops, no FXOS8700 detected ... Check your wiring!");
+        Serial.print(MSG_ACCEL);
+        Serial.println(MSG_FAIL);
         return false;
     }
 
-    //pinMode(LED_BUILTIN, OUTPUT);
 
     if(m_settings->m_save_count == 0)
         return true;
 
-    delay(100);    
-    onCommandBoostFilter();
-    Serial.print("Welcome! AHRS Ver ");
+    Serial.print("AHRS Ver ");
     Serial.println(AHRS_VERSION);
+    delay(100);
+    //m_ahrs->setOrientation(TQuaternionF::Identity());
+    //CalibrateGyroCycle(0.1, 0, 2, false);
+    onCommandBoostFilter();            
 
     return true;
 }
 
 
 
-inline TPoint3F TApplication::getMagn() {
+TPoint3F TApplication::getMagn() {
     if(m_settings->disable_mag )
         return TPoint3F();
-    TPoint3F mag_vec = VectorFromEvent(mag_event.magnetic) - m_settings->mag_offset;
+    TPoint3F mag_vec = m_mag_value - m_settings->mag_offset;
     return m_settings->mag_matrix * mag_vec;
 }
-inline TPoint3F TApplication::getGyro() {    
-    return VectorFromEvent(gyro_event.gyro);
-}
-inline float TApplication::getTemperature() {
-    return gyro_t_event.temperature;
-}
 
-inline TPoint3F TApplication::getAcc() {    
-    return (VectorFromEvent(accel_event.acceleration) - m_settings->acc_zero_offset).scale(m_settings->acc_scale);
+
+TPoint3F TApplication::getAcc() {
+    //return (VectorFromEvent(accel_event.acceleration) - m_settings->acc_zero_offset).scale(m_settings->acc_scale);
+    return (m_acc_value - m_settings->acc_zero_offset).scale(m_settings->acc_scale);
 }
 
 void TApplication::update(float dt)
@@ -139,9 +139,8 @@ void TApplication::update(float dt)
 }
 #include "shared/in_range.hpp"
 void TApplication::updateDevices() {
-    m_device_gyro->getEvent(&gyro_event,&gyro_t_event);
-    m_device_accelmag->getEvent(&accel_event, &mag_event);
-    m_temperature = gyro_t_event.temperature;
+    m_device_gyro->getGyro(m_gyro_value, m_temperature);
+    m_device_accelmag->getAccMag(m_acc_value, m_mag_value);
 }
 
 
@@ -240,17 +239,10 @@ void TApplication::printOut() {
     TPoint3F acc = getAcc();
     PrintVector(acc);
 
-//    Serial.println(" ");
-//    Serial.println(acc.x * FLOAT_ACCURENCY);
-//    Serial.println(acc.y * FLOAT_ACCURENCY);
-//    Serial.println(acc.z * FLOAT_ACCURENCY);
-
-    float temp = getTemperature();    
     Serial.print("t: ");
-    Serial.print(int(temp));
+    Serial.print(int(getTemperature()));
 
-    if(m_settings->print_mag) {
-        TPoint3F mag_raw = VectorFromEvent(mag_event.magnetic);
+    if(m_settings->print_mag) {        
         Serial.print(" gerr: ");
         PrintVector(m_ahrs->m_gyro_error * CONVERT_RAD_TO_DPS * FLOAT_FACKTOR);
 
@@ -265,7 +257,8 @@ void TApplication::printOut() {
         Serial.print(m_fps);
 
         Serial.print(" mag_raw: ");
-        PrintVector(mag_raw * FLOAT_FACKTOR );
+        PrintVector(m_mag_value * FLOAT_FACKTOR );
+        PrintVector(m_ahrs->m_north_local);
     }
     Serial.println();
 
@@ -326,14 +319,15 @@ void TApplication::onCommandSetMagnitudeVector() {
 void TApplication::onCommandCalibrateGyro()
 {
     TQuaternionF q = m_ahrs->m_q;
-    CalibrateGyroStep1(15);
+    CalibrateGyroStep1(30);
 
     m_ahrs->setOrientation(q);
     m_ahrs->setGyroError(m_settings->gyro_zero_offset);
     m_ahrs->setGyroMeas(m_settings->beta, m_settings->zeta);
+    Serial.println(MSG_DONE);
 }
 
-void TApplication::CalibrateGyroCycle(float beta_start, float beta_end, float max_time)
+void TApplication::CalibrateGyroCycle(float beta_start, float beta_end, float max_time, bool verbose)
 {
     TPoint3F gravity (0.0000001f,0.0000001f,9.8f);
     TPoint3F mag     (1.0f,0.0000001f,0.0000001f);
@@ -350,12 +344,14 @@ void TApplication::CalibrateGyroCycle(float beta_start, float beta_end, float ma
         if(dt == 0)
             continue;
         time += dt;
-        if(time - last_print_time > 1) {
-            Serial.print("Calibrate ");
-            Serial.println(int(max_time - time));
-            last_print_time = time;
+        if(verbose) {
+            if(time - last_print_time > 1) {
+                Serial.print("Calibrate ");
+                Serial.println(int(max_time - time));
+                last_print_time = time;
+            }
+            printOut();
         }
-        printOut();
 
         float beta = Lerp(GetProgressSection(time,0,max_time), beta_start, beta_end);
         float zeta = beta * 0.1;
@@ -370,18 +366,16 @@ void TApplication::CalibrateGyroStep1(float max_time)
 {                        
     m_ahrs->setOrientation(TQuaternionF::Identity());
 
-    CalibrateGyroCycle(1, 0, max_time);
+    CalibrateGyroCycle(1, 0, max_time, true);
 
     m_settings->gyro_zero_offset = m_ahrs->m_gyro_error;
-
-    Serial.println(MSG_DONE);
 }
 
 
 void ReadVector(TPoint3F& vec, const char* msg) {
-    vec.x = Serial.parseInt() / FLOAT_ACCURENCY;
-    vec.y = Serial.parseInt() / FLOAT_ACCURENCY;
-    vec.z = Serial.parseInt() / FLOAT_ACCURENCY;
+    vec.x = Serial.parseInt() / FLAOT_FACKTOR_READ;
+    vec.y = Serial.parseInt() / FLAOT_FACKTOR_READ;
+    vec.z = Serial.parseInt() / FLAOT_FACKTOR_READ;
     Serial.print(msg);
     PrintVector(vec);
     Serial.println();
@@ -391,7 +385,7 @@ void TApplication::onCommandSetMagnitudeMatrix() {
     float* mtx = &m_settings->mag_matrix.x[0][0];
 
     for(int i=0;i<9 ; i++)
-        mtx[i] = Serial.parseInt() / FLOAT_ACCURENCY;
+        mtx[i] = Serial.parseInt() / FLAOT_FACKTOR_READ;
 
     Serial.print("Matrix ");
     for(int i=0;i<9 ; i++) {
@@ -407,11 +401,22 @@ void TApplication::onCommandSetMagnitudeMatrix() {
 void TApplication::onCommandBoostFilter() {    
     //ускорить фильтр - чтобы выровнить ориентацию
     updateDevices();
-    TPoint3F acc = getAcc();
-    TPoint3F mag = getMagn();
+    TPoint3F acc;
+    TPoint3F mag;
+    TPoint3F gyr;
+    int samples_count = 10;
+    for(int i=0;i<samples_count;i++) {
+        acc += getAcc();
+        mag += getMagn();
+        gyr += getGyro();
+    }
+    acc /= samples_count;
+    mag /= samples_count;
+    gyr /= samples_count;
+
     TPoint3F angles = m_ahrs->getAngles();
-    angles.x  = atan2( acc.y, acc.z);
-    angles.y  = -atan2( acc.x, acc.z);
+    angles.x  = atan2( acc.y, acc.z) ;
+    angles.y  = (acc.z < 0?1:-1) * atan2( acc.x, acc.z) + (acc.z < 0? M_PI: 0);
     if(!m_settings->disable_mag) {
         TQuaternionF q = TQuaternionF::CreateFormAngles(angles.x, angles.y, 0);
         mag = q.getConjugate().rotateVector(mag);
@@ -419,22 +424,6 @@ void TApplication::onCommandBoostFilter() {
     }
 
     m_ahrs->setOrientation(TQuaternionF::CreateFormAngles(angles.x, angles.y, angles.z));
-
-    float dt = 0.01;
-    unsigned long MAX_I = 50;
-    for(unsigned long i = 0;i < MAX_I;i++) {
-
-        float progress = GetProgressSection(i , 0, MAX_I);
-        float beta = Lerp(progress, BETA_START, BETA_END);
-        m_ahrs->setGyroMeas(beta,0);
-
-        updateDevices();
-        TPoint3F gyr = getGyro();
-        acc = getAcc();
-        mag = getMagn();
-        m_ahrs->update(gyr,acc,mag, dt);
-    }
-    m_ahrs->setGyroMeas(m_settings->beta,m_settings->zeta);
 }
 
 void TApplication::onSettingsChanged() {
@@ -573,8 +562,6 @@ void ChagneCoef(float& coef)
 }
 
 
-
-
 void TApplication::receiveCmd() {
     if (!Serial.available())
         return;
@@ -594,8 +581,9 @@ void TApplication::receiveCmd() {
         return onCommandSetPitchRollByAcc();
 
     case E_CMD_CODE_BOOST_FILTER:
-        Serial.println("Boost");
-        return onCommandBoostFilter();
+        onCommandBoostFilter();
+        Serial.println("Boost done");
+        return;
 
     case E_CMD_CODE_CALIBRATE_GYRO:
         return onCommandCalibrateGyro();

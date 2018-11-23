@@ -9,11 +9,11 @@ class A_FXAS21002C_termo: public A_FXAS21002C
 {
 public:
     typedef TFunction3< TFunctionLineF , float> TFunctionCalibrate;
-    A_FXAS21002C_termo(int32_t sensorID = -1);
+    A_FXAS21002C_termo();
 
     inline void setCalibrateFunction(const TFunctionCalibrate& f)  { m_gyro_zero_avg = f; }
 
-    bool getEvent( sensors_event_t* , sensors_event_t *temp_event );
+    bool getGyro         ( TPoint3F& gyro, float& temp );
 
     /*
      * Set linear function represent gyro zero output ( temperature)

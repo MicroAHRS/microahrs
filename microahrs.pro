@@ -30,7 +30,8 @@ SOURCES += \
     TApplication.cpp \
     A_FXOS8700.cpp \
     A_FXAS21002C.cpp \
-    A_FXAS21002C_termo.cpp
+    A_FXAS21002C_termo.cpp \
+    TAppSettings.cpp
 
 OTHER_FILES += \
     microahrs.ino

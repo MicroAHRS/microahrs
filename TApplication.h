@@ -39,10 +39,10 @@ protected:
     //void turnLight(bool enabled);
     void printOut();
 
-    inline TPoint3F getMagn();
-    inline TPoint3F getGyro();
-    inline TPoint3F getAcc();
-    inline float getTemperature();
+    TPoint3F getAcc();
+    TPoint3F getMagn();
+    TPoint3F getGyro() {return m_gyro_value;}
+    float getTemperature() {return m_temperature;}
 
     inline void onCommandResetPitchRoll();
     inline void onCommandSetYawByMag();
@@ -60,7 +60,7 @@ protected:
 
     void receiveCmd();
 
-    void CalibrateGyroCycle(float beta_start, float beta_end, float max_time);
+    void CalibrateGyroCycle(float beta_start, float beta_end, float max_time, bool verbose);
     void CalibrateGyroStep1(float max_time);
     void onSettingsChanged();
 
@@ -74,10 +74,9 @@ private:
     unsigned int    m_print_out_timer;
 
     float           m_temperature;
-    sensors_event_t gyro_event;
-    sensors_event_t gyro_t_event;
-    sensors_event_t accel_event;
-    sensors_event_t mag_event;
+    TPoint3F        m_gyro_value;
+    TPoint3F        m_acc_value;
+    TPoint3F        m_mag_value;
 
     TAHRSMadgwick*                m_ahrs;
     //Adafruit_FXAS21002C_termo    m_device_gyro;

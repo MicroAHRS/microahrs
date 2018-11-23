@@ -1,13 +1,13 @@
-import processing.serial.*;
+        import processing.serial.*;
 import java.util.Date;
 import java.text.*;
 
 Serial myPort;
 
-float yaw = 0.0;
-float pitch = 0.0;
-float roll = 0.0;
-
+//float yaw = 0.0;
+//float pitch = 0.0;
+//float roll = 0.0;
+Point3F angles = new Point3F();
 Point3F acc = new Point3F();
 Point3FAvarage acc_avg = new Point3FAvarage(2);
 Point3FAvarage mag_avg = new Point3FAvarage(2);
@@ -18,6 +18,8 @@ Point3F gerr = new Point3F();
 Point3F gyro = new Point3F();
 Point3F mag = new Point3F();
 Point3F mag_raw = new Point3F();
+
+Matrix orient_mtx;
 
 int boost_at_start = 0;
 
@@ -90,6 +92,15 @@ PImage g_yaw_cursor;
 void setup()
 {
     size(900, 900, P3D);
+    
+    
+    double[][] d = { 
+        {-1, 0, 0}, 
+        {0, -1, 0}, 
+        {0, 0, 1}       
+    };
+    orient_mtx = new Matrix(d);
+    
 
     g_cross = loadImage("res/horizon3.png");
     //g_cursor = loadImage("cursor.png");  
@@ -97,7 +108,7 @@ void setup()
     g_pitch_cursor = loadImage("res/pitch_indicator.png");
     g_yaw_cursor = loadImage("res/yaw_indicator.png");
     // if you have only ONE serial port active
-    //myPort = new Serial(this, Serial.list()[1], 115200); // if you have only ONE serial port active
+    //myPort = new Serial(this, Serial.list()[0], 115200); // if you have only ONE serial port active
 
     // if you know the serial port name
     //myPort = new Serial(this, "COM5:", 9600);        // Windows "COM#:"
@@ -299,11 +310,11 @@ void drawTextIface() {
     textAlign(LEFT);
     textSize(32);
     fill(100, 0, 0);
-    text("roll    " + roll, x, y+=30);     
+    text("roll    " + angles.x, x, y+=30);     
     fill(0, 100, 0);
-    text("pitch " + pitch, x, y+=30);
+    text("pitch " + angles.y, x, y+=30);
     fill(0, 0, 100);
-    text("yaw   " + yaw, x, y+=30);
+    text("yaw   " + angles.z, x, y+=30);
 
     textSize(24);
     fill(100, 0, 100);
@@ -433,12 +444,12 @@ void draw()
     if (last_message_timer > 0) 
         last_message_timer -= 0.1;
 
-    drawObject2(roll, pitch, yaw, width*0.5, height*0.5);
+    drawObject2(angles.x, angles.y, angles.z, width*0.5, height*0.5);
     stroke(0);
 
-    drawCursor(width*0.5, height*0.75, roll, g_cursor, false, g_anlge_roll, false);
-    drawCursor(width*0.80, height*0.75, pitch, g_pitch_cursor, roll > 90 || roll < - 90, g_angle_pitch, false);  
-    drawCursor(width*0.20, height*0.75, yaw, g_yaw_cursor, false, mag_angle_yaw, true);
+    drawCursor(width*0.5, height*0.75, angles.x, g_cursor, false, g_anlge_roll, false);
+    drawCursor(width*0.80, height*0.75, angles.y, g_pitch_cursor, angles.x > 90 || angles.x < - 90, g_angle_pitch, false);  
+    drawCursor(width*0.20, height*0.75, angles.z, g_yaw_cursor, false, mag_angle_yaw, true);
 
     image(g_cross, width*0.5 -g_cross.width /2, height*0.5 -g_cross.height * 0);
     fill(200, 200, 200);
@@ -469,16 +480,20 @@ Matrix getPitchMatrix(float a)
 }
 
 
-void RotateMag() {
-    double[][] d = {{mag.x, mag.y, mag.z}};
-    Matrix mag_m = new Matrix(d);
+Point3F RotatePointByMatrix(Matrix mtx, Point3F point) {
+    double[][] d = {{point.x, point.y, point.z}};
+    Matrix point_m = new Matrix(d);       
+    Matrix r = point_m.times(mtx);
+    return new Point3F(
+        (float)r.data[0][0],
+        (float)r.data[0][1],
+        (float)r.data[0][2]    
+    );    
+}
 
-    //Matrix m = getPitchMatrix(radians(pitch)).times(getRollMatrix(radians(roll)));
-    Matrix m = getRollMatrix(radians(-roll)).times(getPitchMatrix(radians(pitch)));
-    Matrix r = mag_m.times(m);
-    mag.x = (float)r.data[0][0];
-    mag.y = (float)r.data[0][1];
-    mag.z = (float)r.data[0][2];
+void RotateMag() {
+    Matrix m = getRollMatrix(radians(-angles.x)).times(getPitchMatrix(radians(angles.y)));
+    mag = RotatePointByMatrix(m , mag);    
 }
 
 
@@ -488,14 +503,14 @@ void writeLogger() {
         return;
 
     if (logger_first_line) {
-        logger.println("time, timestamp,roll,pitch,yaw,acc.x,acc.y,acc.z ,temp ,gerr.x,gerr.y ,gerr.z,beta,zeta,mag.x,mag.y,mag.z, fps, ,mag_raw.x,mag_raw.y,mag_raw.z,g ,g_anlge_roll ,g_angle_pitch,mag_angle_yaw");
+        logger.println("time, timestamp,roll,pitch,yaw,acc.x,acc.y,acc.z ,temp ,gerr.x,gerr.y ,gerr.z,beta,zeta,mag.x,mag.y,mag.z, fps,mag_raw.x,mag_raw.y,mag_raw.z,g ,g_anlge_roll ,g_angle_pitch,mag_angle_yaw");
         logger_first_line = false;
     }
 
     DateFormat formatter = new SimpleDateFormat("yyyy-MM-dd_HH_mm_ss");
     Date d = new Date();                          
     logger.println( formatter.format(d) + "," + d.getTime() / 1000
-        + "," + roll + "," + pitch + "," + yaw  
+        + "," + angles.x + "," + angles.y + "," + angles.z  
         + "," + acc.x + "," + acc.y + "," + acc.z 
         + "," + temp 
         + "," + gerr.x + "," + gerr.y  + "," + gerr.z
@@ -527,19 +542,11 @@ boolean onDataMessage(String message, String[] list , boolean from_sensor) {
     }
 
     if (list.length >= l+3) {
-        roll   = float(list[l++]); // convert to float roll
-        pitch  = float(list[l++]); // convert to float pitch
-        yaw    = float(list[l++]) ; // convert to float yaw
+        angles.x  = float(list[l++]); // convert to float roll
+        angles.y  = float(list[l++]); // convert to float pitch
+        angles.z  = float(list[l++]) - 180; // convert to float yaw
     }
-    
-    if(from_sensor) {
-        //roll  *= -1;
-        pitch *= -1;
-        yaw   *= -1;
-    }else {
-        yaw   *= -1;
-    }
-    
+         
     if(from_sensor)  // acc
         l++;
     if (list.length >= l+3) {
@@ -587,9 +594,20 @@ boolean onDataMessage(String message, String[] list , boolean from_sensor) {
         mag_raw.z = float(list[l++]) / FLOAT_FACKTOR;
     }
 
-    if (yaw <0)
-        yaw += 360;
+    if(from_sensor) {        
+        angles.y *= -1;
+        angles.z *= -1; 
+        gerr.y *= -1;
+        gerr.y *= -1;
+    }  
+    if (angles.z <0)
+        angles.z += 360;
 
+    if(from_sensor) {        
+        angles = RotatePointByMatrix(orient_mtx, angles);
+        acc = RotatePointByMatrix(orient_mtx, acc);        
+        gerr = RotatePointByMatrix(orient_mtx, gerr);          
+    }   
 
     acc = acc_avg.avg(acc);
     mag = mag_avg.avg(mag);

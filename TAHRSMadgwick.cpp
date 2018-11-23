@@ -4,19 +4,6 @@
 //
 // Implementation of Madgwick's IMU and AHRS algorithms.
 // See: http://www.x-io.co.uk/open-source-imu-and-ahrs-algorithms/
-//
-// From the x-io website "Open-source resources available on this website are
-// provided under the GNU General Public Licence unless an alternative licence
-// is provided in source."
-//
-// Date			Author          Notes
-// 29/09/2011	SOH Madgwick    Initial release
-// 02/10/2011	SOH Madgwick	Optimised for reduced CPU load
-// 19/02/2012	SOH Madgwick	Magnetometer measurement is normalised
-//
-//=============================================================================================
-
-
 // see @link = https://github.com/ccny-ros-pkg/imu_tools/tree/indigo/imu_filter_madgwick
 //-------------------------------------------------------------------------------------------
 // Header files
@@ -167,23 +154,26 @@ inline  void TAHRSMadgwick::compensateGyroDrift(
     err.y = q.w * s.y + q.x * s.z -  q.y * s.w - q.z * s.x;
     err.z = q.w * s.z - q.x * s.y +  q.y * s.x - q.z * s.w;
     err *= -2.0f;
+    float coef = dt * zeta;
 
+    //if(SameSign(err.x, gyro.x) && m_angle_dest.x > m_zeta_max_angle)
+    if(SameSign(err.x, gyro.x))
+        m_gyro_error.x += err.x * coef;
 
-    if(SameSign(err.x, gyro.x) && m_angle_dest.x > m_zeta_max_angle)
-        m_gyro_error.x += err.x * dt * zeta;
+    //if(SameSign(err.y, gyro.y)  && m_angle_dest.y > m_zeta_max_angle)
+    if(SameSign(err.y, gyro.y))
+        m_gyro_error.y += err.y * coef;
 
-    if(SameSign(err.y, gyro.y)  && m_angle_dest.y > m_zeta_max_angle)
-        m_gyro_error.y += err.y * dt * zeta;
-
-    if(SameSign(err.z, gyro.z)  && m_angle_dest.z > m_zeta_max_angle)
-        m_gyro_error.z += err.z * dt * zeta;
+    //if(SameSign(err.z, gyro.z)  && m_angle_dest.z > m_zeta_max_angle)
+    if(SameSign(err.z, gyro.z))
+        m_gyro_error.z += err.z * coef;
 }
 
 #define AXIS_X 0
 #define AXIS_Y 1
 #define AXIS_Z 2
 
-inline float ComputeVectorAngle(TPoint3F p1, TPoint3F p2, const short a)
+float ComputeVectorAngle(TPoint3F p1, TPoint3F p2, const short a)
 {
     switch (a) {
     case AXIS_X:
@@ -209,11 +199,10 @@ TQuaternionF TAHRSMadgwick::correctiveStepAccel(TPoint3F& acc)
 
     acc.normalize();
     TPoint3F dest_local;
-    result = addGradientDescentStep(m_q, GRAVITY_VECTOR, acc, dest_local);
-    m_angle_dest.x = ComputeVectorAngle(dest_local, acc, AXIS_X);
-    m_angle_dest.y = ComputeVectorAngle(dest_local, acc, AXIS_Y);
-
-    return result;
+    return addGradientDescentStep(m_q, GRAVITY_VECTOR, acc, dest_local);
+    //m_angle_dest.x = ComputeVectorAngle(dest_local, acc, AXIS_X);
+    //m_angle_dest.y = ComputeVectorAngle(dest_local, acc, AXIS_Y);
+    //return result;
 }
 
 TQuaternionF TAHRSMadgwick::correctiveStepMag(TPoint3F& mag, bool yaw_only)
@@ -232,10 +221,10 @@ TQuaternionF TAHRSMadgwick::correctiveStepMag(TPoint3F& mag, bool yaw_only)
 
 //    TPoint3F mag_dest = (yaw_only) ? bearing : compensateMagneticDistortion(q, mag);
 //    return addGradientDescentStep(q, mag_dest, mag);
-    TPoint3F dest_local;
-    result = addGradientDescentStep(m_q, MAGNITUDE_VECTOR, mag, dest_local);
-    m_angle_dest.z = ComputeVectorAngle(dest_local, mag, AXIS_Z);
-    return result;
+    //TPoint3F dest_local;
+    //m_angle_dest.z = ComputeVectorAngle(dest_local, mag, AXIS_Z);
+
+    return addGradientDescentStep(m_q, MAGNITUDE_VECTOR, mag, m_north_local);
 }
 
 

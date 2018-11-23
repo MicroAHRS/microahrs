@@ -1,19 +1,3 @@
-//=============================================================================================
-// Madgwick.h
-//=============================================================================================
-//
-// Implementation of Madgwick's IMU and AHRS algorithms.
-// See: http://www.x-io.co.uk/open-source-imu-and-ahrs-algorithms/
-//
-// From the x-io website "Open-source resources available on this website are
-// provided under the GNU General Public Licence unless an alternative licence
-// is provided in source."
-//
-// Date			Author          Notes
-// 29/09/2011	SOH Madgwick    Initial release
-// 02/10/2011	SOH Madgwick	Optimised for reduced CPU load
-//
-//=============================================================================================
 #ifndef __Madgwick2_h__
 #define __Madgwick2_h__
 
@@ -26,12 +10,15 @@
 // Variable declaration
 class TAHRSMadgwick{
 public:
-    float beta;
-    float zeta;
+
+    float beta;     //for accelerometer and mag
+    float zeta;     //for gyro compensation
+
+    //float gama;
 
     TQuaternionF m_q;
-    TPoint3F     m_gyro_error;        
-    TPoint3F     m_angle_dest;
+    TPoint3F     m_gyro_error;            
+    TPoint3F     m_north_local;
     float        m_zeta_max_angle;
 public:
     TAHRSMadgwick();
