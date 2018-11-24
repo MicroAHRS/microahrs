@@ -10,6 +10,7 @@ enum ECommandCode {
 
     E_CMD_CODE_CHANGE_BETA           = 5,
     E_CMD_CODE_CHANGE_ZETA           = 6,
+    E_CMD_CODE_CHANGE_NETA           = 7,
 
     E_CMD_CODE_SET_GRAVITY_VECTOR  = 10,  // текущее направление силы тяжести принять за 0 (roll pitch)
     E_CMD_CODE_SET_YAW_NORTH       = 11,  // текущее направление на север принять за 0 (yaw)

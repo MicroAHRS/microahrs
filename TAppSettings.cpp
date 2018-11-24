@@ -51,11 +51,13 @@ void TAppSettings::initDefault() {
 
     beta       = 0.04;
     zeta       = 0.004;
+    neta       = 1.0;
+
     disable_gyro = false;
     disable_acc  = false;
     disable_mag  = false;
     print_mag    = true;
-    pitch_max = 250;
+
     roll_max = 150;
 
 #ifdef DEVICE_SET_1

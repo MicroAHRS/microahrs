@@ -1,88 +1,19 @@
-        import processing.serial.*;
+import processing.serial.*;
 import java.util.Date;
 import java.text.*;
 
-Serial myPort;
+Serial sensor_port;
 
-//float yaw = 0.0;
-//float pitch = 0.0;
-//float roll = 0.0;
-Point3F angles = new Point3F();
-Point3F acc = new Point3F();
-Point3FAvarage acc_avg = new Point3FAvarage(2);
-Point3FAvarage mag_avg = new Point3FAvarage(2);
-Point3FAvarage gerr_avg = new Point3FAvarage(2);
-AvarageValue gangle_avg = new AvarageValue(10,0);
 
-Point3F gerr = new Point3F();
-Point3F gyro = new Point3F();
-Point3F mag = new Point3F();
-Point3F mag_raw = new Point3F();
-
-Matrix orient_mtx;
-
-int boost_at_start = 0;
-
-float temp = 0.0;
-
-float beta = 0;
-float zeta = 0;
-
-float last_message_time_max = 30.0;
-float last_message_timer = 0.0;
+float  last_message_time_max = 30.0;
+float  last_message_timer = 0.0;
 String last_message = "Hello";
 
-float g=0;
-float g_anlge_roll=0;
-float g_angle_pitch=0;
-float mag_angle_yaw=0;
-float overload=0;
-
-float fps= 0;
-
-String time;
+SensorData  sensor_data = new SensorData();
 
 PrintWriter logger;
 boolean logger_first_line = false;
-
 BufferedReader log_reader;
-
-
-byte
-    E_CMD_CODE_NONE = 0, 
-    E_CMD_CODE_RESET_PITCH_ROLL      = 1, // сбросить крен тангаж
-    E_CMD_CODE_SET_YAW_BY_MAG        = 2, // установить углы по магнетометру
-    E_CMD_CODE_SET_PITCH_ROLL_BY_ACC = 3, // установить углы по акселерометру
-    E_CMD_CODE_BOOST_FILTER          = 4, // установить углы по акселерометру
-
-    E_CMD_CODE_CHANGE_BETA           = 5, 
-    E_CMD_CODE_CHANGE_ZETA           = 6, 
-
-    E_CMD_CODE_SET_GRAVITY_VECTOR  = 10, // текущее направление силы тяжести принять за 0 (roll pitch)
-    E_CMD_CODE_SET_YAW_NORTH       = 11, // текущее направление на север принять за 0 (yaw)
-    E_CMD_CODE_DEFAULT_ORIENTATION = 12, // сбросить модификатор ориентации
-
-    E_CMD_CODE_CALIBRATE_GYRO       = 20, 
-    E_CMD_CODE_SET_MAGNITUDE_OFFSET = 21, 
-    E_CMD_CODE_SET_MAGNITUDE_MATRIX = 22, 
-
-    E_CMD_CODE_SET_ACC_OFFSET       = 23, 
-    E_CMD_CODE_SET_ACC_SCALE        = 24, 
-
-    E_CMD_CODE_DEBUG_ACTION         = 30, 
-    E_CMD_CODE_TOGGLE_GYRO          = 31, 
-    E_CMD_CODE_CALIBRATION_STOP     = 32, // code = space - useful when send calibration
-    E_CMD_CODE_TOGGLE_MAG           = 33, 
-    E_CMD_CODE_TOGGLE_ACC           = 34, 
-
-
-    E_CMD_CODE_SAVE                = 40, 
-    E_CMD_CODE_LOAD                = 41, 
-    E_CMD_CODE_LOAD_DEFAULT        = 42, 
-    E_CMD_CODE_TOGGLE_PRINT_MODE   = 43, 
-    the_end = 0
-    ;
-
 
 PImage g_cross;
 PImage g_cursor;
@@ -92,35 +23,42 @@ PImage g_yaw_cursor;
 void setup()
 {
     size(900, 900, P3D);
-    
-    
-    double[][] d = { 
-        {-1, 0, 0}, 
-        {0, -1, 0}, 
-        {0, 0, 1}       
-    };
-    orient_mtx = new Matrix(d);
-    
-
-    g_cross = loadImage("res/horizon3.png");
-    //g_cursor = loadImage("cursor.png");  
+       
+    g_cross = loadImage("res/horizon3.png");    
     g_cursor = loadImage("res/FrontPlaneIcon2.png");
     g_pitch_cursor = loadImage("res/pitch_indicator.png");
     g_yaw_cursor = loadImage("res/yaw_indicator.png");
-    // if you have only ONE serial port active
-    //myPort = new Serial(this, Serial.list()[0], 115200); // if you have only ONE serial port active
-
-    // if you know the serial port name
-    //myPort = new Serial(this, "COM5:", 9600);        // Windows "COM#:"
-    //myPort = new Serial(this, "\\\\.\\COM41", 9600); // Windows, COM10 or higher
-    myPort = new Serial(this, "/dev/ttyUSB0", 115200);   // Linux "/dev/ttyACM#"
-    //myPort = new Serial(this, "/dev/cu.usbmodem1217321", 9600);  // Mac "/dev/cu.usbmodem######"
-
-    myPort.write(E_CMD_CODE_BOOST_FILTER);
+      
+    setupSerial();
+                
     textSize(16); // set text size
     textMode(SHAPE); // set text mode to shape
 }
 
+
+void setupSerial() {
+    
+    final String OS = platformNames[platform];
+    println("OS "+OS);
+    
+    int speed = 115200;
+    String com_port_name;
+    
+    if(OS == "linux") {
+        com_port_name = "/dev/ttyUSB0"; // Linux "/dev/ttyACM#"       
+    } else if(OS == "windows") {
+        com_port_name = "COM5:";     /// Pronin E; Alexey please change here 
+        //com_port_name = "\\\\.\\COM41";   // Windows, COM10 or higher        
+    } else if(OS == "macos") { 
+        com_port_name = "/dev/cu.usbmodem1217321";        
+    } else { 
+        com_port_name = Serial.list()[0];    // if you have only ONE serial port active      
+        println("Waring! Unknown OS: "+OS);
+    }
+    
+    sensor_port = new Serial(this, com_port_name, speed);
+    
+}
 
 void drawTextCommand() {
     float x = width/2 - 150;
@@ -133,13 +71,14 @@ void drawTextCommand() {
     text("c - CALIBRATE_GYRO ", x, y+=h );         
     text("b - CHANGE_BETA ", x, y+=h );
     text("z - CHANGE_ZETA ", x, y+=h );
+    text("n - CHANGE_NETA ", x, y+=h );       
     text("f - BOOST_FILTER ", x, y+=h );
     y+=h/2;
     text("g - TOGGLE_GYRO ", x, y+=h );
     text("m - TOGGLE_MAG ", x, y+=h );    
     text("a - TOGGLE_ACC ", x, y+=h );
     text("w - DEBUG_ACTION ", x, y+=h );
-    text("v - VERBOSE OUTPUT ", x, y+=h );
+    //text("v - VERBOSE OUTPUT ", x, y+=h );
     y+=h/2;
 
     x = width/2 + 50;
@@ -149,16 +88,14 @@ void drawTextCommand() {
     text("l - LOAD ", x, y+=h );
     text("d - LOAD_DEFAULT ", x, y+=h );
     y+=h/2;
-    text("p - SET_PITCH_AND_ROLL", x, y+=h );    
-    text("y - SET_YAW ", x, y+=h );
-    text("i - DEFAULT_ORIENTATION ", x, y+=h );
-    y+=h/2;
+    //text("p - SET_PITCH_AND_ROLL", x, y+=h );    
+    //text("y - SET_YAW ", x, y+=h );
+    //text("i - DEFAULT_ORIENTATION ", x, y+=h );
+    //y+=h/2;
     text("r - RECORDING START ", x, y+=h );
     text("o - OPEN RECORD ", x, y+=h );    
     y+=h/2;
-
-
-    //text("r - E_CMD_CODE_LOAD_DEFAULT ", x, y+=h );
+    //text("r - SensorCommands.E_CMD_CODE_LOAD_DEFAULT ", x, y+=h );
 }
 
 void showMessage(String message) 
@@ -184,9 +121,7 @@ void onCmdRecordStart() {
     logger_first_line = true;
 }
 
-void sendCmdBoost() {
-    myPort.write(E_CMD_CODE_BOOST_FILTER);
-}
+
 
 void cmdOpenLog() {
     selectInput("Select a file to process:", "fileSelected");
@@ -200,87 +135,96 @@ void fileSelected(File selection) {
 
     log_reader = createReader(selection.getAbsolutePath());
 }
+   
+void SendCmd(byte cmd) {
+    println( "Send cmd "+cmd);
+    sensor_port.write(cmd);               
+}
 
 void keyPressed() {
     println("Key = " + int(key));
-
-    byte cmd_code = E_CMD_CODE_NONE;
-
+    byte cmd_code = SensorCommands.E_CMD_CODE_NONE;
     if (key == 'w' || key == 'W')  // force
-        cmd_code = E_CMD_CODE_DEBUG_ACTION;
+        cmd_code = SensorCommands.E_CMD_CODE_DEBUG_ACTION;
     if (key == 'c' || key == 'C')  // force
-        cmd_code = E_CMD_CODE_CALIBRATE_GYRO;
+        cmd_code = SensorCommands.E_CMD_CODE_CALIBRATE_GYRO;
     if (key == 'q' || key == 'Q')  // force
-        cmd_code = E_CMD_CODE_RESET_PITCH_ROLL;
+        cmd_code = SensorCommands.E_CMD_CODE_RESET_PITCH_ROLL;
     if (key == 'f' || key == 'F')  // force
-        cmd_code = E_CMD_CODE_BOOST_FILTER;
+        cmd_code = SensorCommands.E_CMD_CODE_BOOST_FILTER;
     if (key == 'z' || key == 'Z')
-        cmd_code = E_CMD_CODE_CHANGE_ZETA;
+        cmd_code = SensorCommands.E_CMD_CODE_CHANGE_ZETA;
     if (key == 'b' || key == 'B')
-        cmd_code = E_CMD_CODE_CHANGE_BETA;
+        cmd_code = SensorCommands.E_CMD_CODE_CHANGE_BETA;
+    if (key == 'n' || key == 'N')
+        cmd_code = SensorCommands.E_CMD_CODE_CHANGE_NETA;
     if (key == 'm' || key == 'M')
-        cmd_code = E_CMD_CODE_TOGGLE_MAG;
+        cmd_code = SensorCommands.E_CMD_CODE_TOGGLE_MAG;
     if (key == 'a' || key == 'A')
-        cmd_code = E_CMD_CODE_TOGGLE_ACC;
+        cmd_code = SensorCommands.E_CMD_CODE_TOGGLE_ACC;
     if (key == 'g' || key == 'G')
-        cmd_code = E_CMD_CODE_TOGGLE_GYRO;
+        cmd_code = SensorCommands.E_CMD_CODE_TOGGLE_GYRO;
     if (key == 's' || key == 'S')
-        cmd_code = E_CMD_CODE_SAVE;
+        cmd_code = SensorCommands.E_CMD_CODE_SAVE;
     if (key == 'l' || key == 'L')
-        cmd_code = E_CMD_CODE_LOAD;
+        cmd_code = SensorCommands.E_CMD_CODE_LOAD;
     if (key == 'd' || key == 'D')  //recovery
-        cmd_code = E_CMD_CODE_LOAD_DEFAULT;  
-    if (key == 'y' || key == 'Y')  //yaw
-        cmd_code = E_CMD_CODE_SET_YAW_NORTH;
-    if (key == 'p' || key == 'P')  // pitch
-        cmd_code = E_CMD_CODE_SET_GRAVITY_VECTOR;
+        cmd_code = SensorCommands.E_CMD_CODE_LOAD_DEFAULT;  
+    //if (key == 'y' || key == 'Y')  //yaw
+    //    cmd_code = SensorCommands.E_CMD_CODE_SET_YAW_NORTH;
+    //if (key == 'p' || key == 'P')  // pitch
+    //    cmd_code = SensorCommands.E_CMD_CODE_SET_GRAVITY_VECTOR;
     if (key == 'i' || key == 'I')  // pitch
-        cmd_code = E_CMD_CODE_DEFAULT_ORIENTATION;
+        cmd_code = SensorCommands.E_CMD_CODE_DEFAULT_ORIENTATION;
     if (key == 'v' )
-        cmd_code = E_CMD_CODE_TOGGLE_PRINT_MODE;
+        cmd_code = SensorCommands.E_CMD_CODE_TOGGLE_PRINT_MODE;
     if (key == 'o' )
         cmdOpenLog();    
     if (key == 'r' || key == 'R')   
         onCmdRecordStart();   
   
-
-
-    if (cmd_code != E_CMD_CODE_NONE) {
-        println( "Send cmd "+cmd_code);
-        myPort.write(cmd_code);
-    }
+    if (cmd_code != SensorCommands.E_CMD_CODE_NONE)
+        SendCmd(cmd_code);    
 }
 
+String getAngleMark(int angle) {
+    if(angle == 0)
+        return "СЕВЕР";
+    if(angle == 45)
+        return "СВ";
+    if(angle == 90)
+        return "ВОСТОК";
+    if(angle == 135)
+        return "ЮВ";
+    if(angle  == 180)
+        return "ЮГ";
+    if(angle  == 225)
+        return "ЮЗ";
+    if(angle  == 270)
+        return "ЗАПАД";
+    if(angle  == 315)
+        return "СЗ";
+    return "";
+}
 
-
-void drawObject2(float roll, float pitch, float yaw, float x, float y) {
+void drawHorisont(float roll, float pitch, float yaw, float x, float y) {
 
     pushMatrix(); // begin object
     translate(x, y, -100);
-
-    //float c1 = cos(radians(roll));
-    //float s1 = sin(radians(roll));
-    //float c2 = cos(radians(pitch * 0));
-    //float s2 = sin(radians(pitch * 0));
-    //float c3 = cos(radians(90));
-    //float s3 = sin(radians(90));
-    //applyMatrix( c2*c3, s1*s3+c1*c3*s2, c3*s1*s2-c1*s3, 0,
-    //             -s2, c1*c2, c2*s1, 0,
-    //             c2*s3, c1*s2*s3-c3*s1, c1*c3+s1*s2*s3, 0,
-    //             0, 0, 0, 1);
-
+  
     rotate(radians(-roll));
 
     float pixels_per_degree = 10;
     translate(0, pitch * pixels_per_degree);
 
-
     pushMatrix(); // begin object
     stroke(0);
     fill(0, 0, 0); // ground       
     box(2400 * 2, 1, 2);
-
-    fill(128, 255, 128); // ground
+    if(sensor_data.m_beta == 0 && sensor_data.m_zeta == 0)
+        fill(206, 130, 16); // ground
+    else
+        fill(128, 255, 128); // ground
     translate(0, 600 * 2); // set position to edge of Arduino box
     box(2400 * 2, 1200 * 2, 1);
     popMatrix(); // end of object
@@ -289,13 +233,22 @@ void drawObject2(float roll, float pitch, float yaw, float x, float y) {
     noStroke(); 
     fill(0, 0, 0); 
     float h = 100;
-    float angle_step = 10;    
+    textAlign(CENTER);
+    float angle_step = 15;    
     for (int ya = -360; ya <= +360 + 360; ya += angle_step) {
         float lx = (-yaw + ya) * pixels_per_degree;      
-        h=(ya % 45 == 0) ? 100 : 50;      
-        float w=(ya % 45 == 0) ? 2 : 1;
+        h=(ya % 45 == 0) ? 70 : 50;
+        h=(ya % 90 == 0) ? 100 : h;
+        float w=(ya % 45 == 0) ? 2 : 1;        
+        
+          
         pushMatrix();
-        translate(lx, 0, 10); 
+        translate(lx, 0, 10);
+        
+        String mark = getAngleMark((ya + 360) % 360);
+        if(mark!= "")
+            text(mark, 0, -h*1.5);
+      
         //line(0, -h, 0, +h);
         box(w, h*2, 1);
         popMatrix();
@@ -310,57 +263,56 @@ void drawTextIface() {
     textAlign(LEFT);
     textSize(32);
     fill(100, 0, 0);
-    text("roll    " + angles.x, x, y+=30);     
+    text("roll    " + sensor_data.m_angles.x, x, y+=30);     
     fill(0, 100, 0);
-    text("pitch " + angles.y, x, y+=30);
+    text("pitch " + sensor_data.m_angles.y, x, y+=30);
     fill(0, 0, 100);
-    text("yaw   " + angles.z, x, y+=30);
+    text("yaw   " + sensor_data.m_angles.z, x, y+=30);
 
     textSize(24);
     fill(100, 0, 100);
-    text("roll err  " + nf(gerr.x, 1, 5), x, y+=30);     
-    text("pitch err " + nf(gerr.y, 1, 5), x, y+=24);    
-    text("yaw err   " + nf(gerr.z, 1, 5), x, y+=24);
+    text("roll err  " + nf(sensor_data.m_gerr.x, 1, 5), x, y+=30);     
+    text("pitch err " + nf(sensor_data.m_gerr.y, 1, 5), x, y+=24);    
+    text("yaw err   " + nf(sensor_data.m_gerr.z, 1, 5), x, y+=24);
 
     y+=24;
     fill(100, 100, 0);
-    text("beta " + nf(beta, 1, 5), x, y+=24);     
-    text("zeta " + nf(zeta, 1, 5), x, y+=24);        
+    text("beta " + nf(sensor_data.m_beta, 1, 5), x, y+=24);     
+    text("zeta " + nf(sensor_data.m_zeta, 1, 5), x, y+=24);
+    text("neta " + nf(sensor_data.m_neta, 1, 5), x, y+=24);
 
 
     x = width - 200;
     y = 0;
     textSize(32);
     fill(100, 100, 100);
-    text("mag.x " + mag_raw.x, x, y+=30); 
+    text("mag.x " + sensor_data.m_mag_raw.x, x, y+=30); 
     //fill(0, 100, 0);
-    text("mag.y " + mag_raw.y, x, y+=30);
+    text("mag.y " + sensor_data.m_mag_raw.y, x, y+=30);
     //fill(0, 0, 100);
-    text("mag.z " + mag_raw.z, x, y+=30);
+    text("mag.z " + sensor_data.m_mag_raw.z, x, y+=30);
 
     fill(100, 100, 100);
-    text("acc.x " + acc.x, x, y+=30); 
+    text("acc.x " + sensor_data.m_acc.x, x, y+=30); 
     //fill(0, 100, 0);
-    text("acc.y " + acc.y, x, y+=30);
+    text("acc.y " + sensor_data.m_acc.y, x, y+=30);
     //fill(0, 0, 100);
-    text("acc.z " + acc.z, x, y+=30);
+    text("acc.z " + sensor_data.m_acc.z, x, y+=30);
 
 
     fill(100, 100, 0);
-    text("g " + nf(g, 1, 2), x, y+=30);
+    text("g " + nf(sensor_data.m_g, 1, 2), x, y+=30);
     //text("a " +  nf(g_anlge_roll,1,2), x, y+=30);
-    text("overload " + nf(overload, 1, 1), x, y+=30);
+    text("overload " + nf(sensor_data.m_overload, 1, 1), x, y+=30);
 
     x = width/2 - 100;
     y = 0;
     fill(100, 0, 0);
-    text("temp " + temp, x, y+=30);
-    text("fps " + fps, x, y+=30);     
-    text("time " + time, x, y+=30);    
+    text("temp " + sensor_data.m_temp, x, y+=30);
+    text("fps " + sensor_data.m_fps, x, y+=30);     
+    text("time " + sensor_data.m_time, x, y+=30);    
 
     drawTextCommand();
-
-
 
     textSize(24);
     x = width / 2;
@@ -375,7 +327,7 @@ void drawCursor(float x, float y, float angle, PImage img, boolean flip, float a
     pushMatrix(); // begin object
     translate(x, y);
     rotate(radians(angle));  
-    fill(200);
+    fill(200,200,200,128);
     float w2 = img.width / 2;
     float h2 = img.height / 2;
     float d = 260;
@@ -410,12 +362,7 @@ void drawCursor(float x, float y, float angle, PImage img, boolean flip, float a
     ellipse(0, 0, d2, d2);   
     popMatrix(); // end of object 
 
-
-
     popMatrix(); // end of object
-
-
-
 
     textAlign(CENTER);
     textSize(32);
@@ -444,58 +391,20 @@ void draw()
     if (last_message_timer > 0) 
         last_message_timer -= 0.1;
 
-    drawObject2(angles.x, angles.y, angles.z, width*0.5, height*0.5);
+    drawHorisont(sensor_data.m_angles.x, sensor_data.m_angles.y, sensor_data.m_angles.z, width*0.5, height*0.5);
     stroke(0);
 
-    drawCursor(width*0.5, height*0.75, angles.x, g_cursor, false, g_anlge_roll, false);
-    drawCursor(width*0.80, height*0.75, angles.y, g_pitch_cursor, angles.x > 90 || angles.x < - 90, g_angle_pitch, false);  
-    drawCursor(width*0.20, height*0.75, angles.z, g_yaw_cursor, false, mag_angle_yaw, true);
+    drawCursor(width*0.5, height*0.75, sensor_data.m_angles.x, g_cursor, false,  sensor_data.m_g_anlge_roll, false);
+    drawCursor(width*0.80, height*0.75, sensor_data.m_angles.y, g_pitch_cursor, sensor_data.m_angles.x > 90 || sensor_data.m_angles.x < - 90,  sensor_data.m_g_angle_pitch, false);  
+    drawCursor(width*0.20, height*0.75, sensor_data.m_angles.z, g_yaw_cursor, false,  sensor_data.m_mag_angle_yaw, false);
 
     image(g_cross, width*0.5 -g_cross.width /2, height*0.5 -g_cross.height * 0);
     fill(200, 200, 200);
     drawGravityIndicator(width*0.5, height*0.5, 0, 40);
     fill(100, 200, 200);
-    drawGravityIndicator(width*0.5, height*0.5, gangle_avg.avg(-g_anlge_roll), 20);
+    drawGravityIndicator(width*0.5, height*0.5,  - sensor_data.m_g_angle_roll_avg.getAvg(), 20);
     drawTextIface();
 }
-
-Matrix getRollMatrix(float a) 
-{    
-    double[][] d = { 
-        {1, 0, 0}, 
-        {0, cos(a), -sin(a)}, 
-        {0, sin(a), cos(a)}       
-    };
-    return new Matrix(d);
-}
-
-Matrix getPitchMatrix(float a) 
-{    
-    double[][] d = { 
-        {cos(a), 0, sin(a)}, 
-        {0, 1, 0}, 
-        {-sin(a), 0, cos(a)}       
-    };
-    return new Matrix(d);
-}
-
-
-Point3F RotatePointByMatrix(Matrix mtx, Point3F point) {
-    double[][] d = {{point.x, point.y, point.z}};
-    Matrix point_m = new Matrix(d);       
-    Matrix r = point_m.times(mtx);
-    return new Point3F(
-        (float)r.data[0][0],
-        (float)r.data[0][1],
-        (float)r.data[0][2]    
-    );    
-}
-
-void RotateMag() {
-    Matrix m = getRollMatrix(radians(-angles.x)).times(getPitchMatrix(radians(angles.y)));
-    mag = RotatePointByMatrix(m , mag);    
-}
-
 
 void writeLogger() {
 
@@ -503,159 +412,11 @@ void writeLogger() {
         return;
 
     if (logger_first_line) {
-        logger.println("time, timestamp,roll,pitch,yaw,acc.x,acc.y,acc.z ,temp ,gerr.x,gerr.y ,gerr.z,beta,zeta,mag.x,mag.y,mag.z, fps,mag_raw.x,mag_raw.y,mag_raw.z,g ,g_anlge_roll ,g_angle_pitch,mag_angle_yaw");
+        logger.println(sensor_data.makeMessageRecordHeader());
         logger_first_line = false;
     }
-
-    DateFormat formatter = new SimpleDateFormat("yyyy-MM-dd_HH_mm_ss");
-    Date d = new Date();                          
-    logger.println( formatter.format(d) + "," + d.getTime() / 1000
-        + "," + angles.x + "," + angles.y + "," + angles.z  
-        + "," + acc.x + "," + acc.y + "," + acc.z 
-        + "," + temp 
-        + "," + gerr.x + "," + gerr.y  + "," + gerr.z
-        + "," + beta + "," + zeta          
-        + "," + mag.x + "," + mag.y  + "," + mag.z          
-        + "," + fps
-        + "," + mag_raw.x + "," + mag_raw.y  + "," + mag_raw.z
-        + "," + g 
-        + "," + g_anlge_roll  + "," + g_angle_pitch + "," + mag_angle_yaw           
-        );
-}
-
-boolean onDataMessage(String message, String[] list , boolean from_sensor) {
-    if (list.length <= 4)
-        return false;
-        
-    if(from_sensor && !list[0].equals("Orient:"))
-        return false;
-        
-    float FLOAT_FACKTOR = from_sensor ? 1000 : 1;
-    int l = 0;
-    if(from_sensor)
-        l++; 
-    
-    if(from_sensor) {
-        DateFormat formatter = new SimpleDateFormat("HH:mm:ss");
-        Date d = new Date();    
-        time = formatter.format(d);
-    }
-
-    if (list.length >= l+3) {
-        angles.x  = float(list[l++]); // convert to float roll
-        angles.y  = float(list[l++]); // convert to float pitch
-        angles.z  = float(list[l++]) - 180; // convert to float yaw
-    }
-         
-    if(from_sensor)  // acc
-        l++;
-    if (list.length >= l+3) {
-        acc.x = float(list[l++]) ; 
-        acc.y = float(list[l++]) ; 
-        acc.z = float(list[l++]) ;
-    }
-    if(from_sensor) // temp
-        l++;
-        
-    if (list.length >= l) 
-        temp = float(list[l++]);
-    
-    if(from_sensor) // gerr
-        l++;
-    if (list.length >= l+3) {    
-        gerr.x = float(list[l++]) / FLOAT_FACKTOR;
-        gerr.y = float(list[l++]) / FLOAT_FACKTOR;
-        gerr.z = float(list[l++]) / FLOAT_FACKTOR;
-    }
-
-    if (list.length >= l+2) {
-        beta = float(list[l++]) / FLOAT_FACKTOR;
-        zeta = float(list[l++]) / FLOAT_FACKTOR;
-    }
-    
-    if(from_sensor)  // mag
-        l++;
-    if (list.length >= l+3) {
-        mag.x = float(list[l++]) ; 
-        mag.y = float(list[l++]) ; 
-        mag.z = float(list[l++]) ;
-    }
-
-    if(from_sensor)
-        l++;
-    if (list.length >= l) 
-        fps = float(list[l++]) ;     
-
-    if(from_sensor)
-        l++;
-    if (list.length >= l+3) {        
-        mag_raw.x = float(list[l++]) / FLOAT_FACKTOR;
-        mag_raw.y = float(list[l++]) / FLOAT_FACKTOR;
-        mag_raw.z = float(list[l++]) / FLOAT_FACKTOR;
-    }
-
-    if(from_sensor) {        
-        angles.y *= -1;
-        angles.z *= -1; 
-        gerr.y *= -1;
-        gerr.y *= -1;
-    }  
-    if (angles.z <0)
-        angles.z += 360;
-
-    if(from_sensor) {        
-        angles = RotatePointByMatrix(orient_mtx, angles);
-        acc = RotatePointByMatrix(orient_mtx, acc);        
-        gerr = RotatePointByMatrix(orient_mtx, gerr);          
-    }   
-
-    acc = acc_avg.avg(acc);
-    mag = mag_avg.avg(mag);
-    gerr = gerr_avg.avg(gerr);
-
-    g= acc.len();
-    g_anlge_roll = degrees(atan2( acc.y, acc.z));
-    g_angle_pitch = degrees(atan2( acc.x, acc.z));
-
-    RotateMag();
-    mag_angle_yaw = degrees(atan2( mag.y, mag.x));
-    overload = g / 9.8;
-
-
-    if (boost_at_start>0) {
-        boost_at_start--;
-        if(boost_at_start == 0)
-            sendCmdBoost();
-    }
-
-    writeLogger();   
-    return true;
-}
-
-void serialEvent()
-{
-    if(myPort == null)
-        return;
-    int newLine = 13; // new line character in ASCII
-    String message;
-    do {
-        message = myPort.readStringUntil(newLine); // read from port until new line
-        if (message == null)
-            break;
-
-        message = trim(message);
-        String[] list = split(message, " ");
-
-        if (onDataMessage(message, list, true)) {
-            
-            continue;
-        }
-
-
-        if (message.length() > 0  ) 
-            showMessage(message);        
-        println(message);
-    } while (true);
+  
+    logger.println( sensor_data.makeMessageRecord());
 }
 
 void readLogEvent() {
@@ -664,20 +425,39 @@ void readLogEvent() {
     try {
         String message = log_reader.readLine();
         message = log_reader.readLine();
-
         if (message == null) {
             log_reader.close();
             log_reader = null;
             showMessage("Finished"); 
             return;
-        }
-        //print(message);
-        String[] list = split(message, ",");
-        time = list[0];
-        String[] list2 = subset(list, 2);        
-        onDataMessage(message, list2, false);
+        }                             
+        sensor_data.onMessageRecord(message);
     } 
     catch (IOException e) {
         e.printStackTrace();
     }
+}
+
+
+void serialEvent()
+{
+    if(sensor_port == null)
+        return;
+    int newLine = 13; // new line character in ASCII
+    String message;
+    do {
+        message = sensor_port.readStringUntil(newLine); // read from port until new line
+        if (message == null)
+            break;
+
+        message = trim(message);        
+        if (sensor_data.onMessageSensor(message)) {                 
+            writeLogger();
+            continue;
+        }
+
+        if (message.length() > 0  ) 
+            showMessage(message);        
+        //println(message);
+    } while (true);
 }

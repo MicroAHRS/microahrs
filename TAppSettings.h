@@ -34,7 +34,7 @@ public:
     float acc_max_length_sq;
     float acc_min_length_sq;
 
-    float pitch_max;
+    float neta;
     float roll_max;
 
     // mag calibration

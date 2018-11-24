@@ -169,17 +169,17 @@ void TApplication::updateDriftCoefByAngles()
     // if pitch or roll too big
     // set beta to smoler value    
     if(!InRangeInc(acc_len_square, m_settings->acc_min_length_sq, m_settings->acc_max_length_sq )) {
-        m_ahrs->setGyroMeas(0,0);
+        m_ahrs->setGyroMeas(0,0,0);
         return;
     }
 
     float beta = m_settings->beta;
     float zeta = m_settings->zeta;
+    float neta = m_settings->neta;
 
-    // TPoint3F angles = m_ahrs->getAngles(); // USE modidfed angles
-    // TODO change beta zeta by angle
+    // TODO change beta zeta by mag change speed
 
-    m_ahrs->setGyroMeas(beta, zeta);
+    m_ahrs->setGyroMeas(beta, zeta, neta);
 
 }
 
@@ -246,10 +246,9 @@ void TApplication::printOut() {
         Serial.print(" gerr: ");
         PrintVector(m_ahrs->m_gyro_error * CONVERT_RAD_TO_DPS * FLOAT_FACKTOR);
 
-        Serial.print(m_ahrs->beta * FLOAT_FACKTOR * CONVERT_RAD_TO_DPS / 0.866025404);
-        Serial.print(" ");
-        Serial.print(m_ahrs->zeta * FLOAT_FACKTOR * CONVERT_RAD_TO_DPS / 0.866025404);
-        Serial.print(" ");
+        TPoint3F coefs(m_ahrs->beta, m_ahrs->zeta, m_ahrs->neta);
+        PrintVector(coefs * (FLOAT_FACKTOR * CONVERT_RAD_TO_DPS / 0.866025404));
+
         Serial.print("mag: ");
         TPoint3F mag = getMagn();
         PrintVector(mag);
@@ -258,7 +257,8 @@ void TApplication::printOut() {
 
         Serial.print(" mag_raw: ");
         PrintVector(m_mag_value * FLOAT_FACKTOR );
-        PrintVector(m_ahrs->m_north_local);
+        Serial.print("north: ");
+        PrintVector(m_ahrs->m_mag_horisontal * FLOAT_FACKTOR );
     }
     Serial.println();
 
@@ -323,7 +323,7 @@ void TApplication::onCommandCalibrateGyro()
 
     m_ahrs->setOrientation(q);
     m_ahrs->setGyroError(m_settings->gyro_zero_offset);
-    m_ahrs->setGyroMeas(m_settings->beta, m_settings->zeta);
+    m_ahrs->setGyroMeas(m_settings->beta, m_settings->zeta, m_settings->neta);
     Serial.println(MSG_DONE);
 }
 
@@ -353,9 +353,9 @@ void TApplication::CalibrateGyroCycle(float beta_start, float beta_end, float ma
             printOut();
         }
 
-        float beta = Lerp(GetProgressSection(time,0,max_time), beta_start, beta_end);
+        float beta = Lerp(GetProgressSection(time,0,max_time), beta_start, beta_end);        
         float zeta = beta * 0.1;
-        m_ahrs->setGyroMeas(beta,zeta);
+        m_ahrs->setGyroMeas(beta,zeta,beta);
         updateDevices();
         TPoint3F gyr = getGyro();
         m_ahrs->update(gyr, gravity, mag, dt);
@@ -428,8 +428,9 @@ void TApplication::onCommandBoostFilter() {
 
 void TApplication::onSettingsChanged() {
 
-    m_ahrs->setGyroError(m_settings->gyro_zero_offset);
-    m_ahrs->setGyroMeas(m_settings->beta, m_settings->zeta);
+    m_ahrs->setGyroError(m_settings->disable_gyro ? TPoint3F() : m_settings->gyro_zero_offset);
+    float zeta = m_settings->disable_gyro ? 0 : m_settings->zeta;
+    m_ahrs->setGyroMeas(m_settings->beta, zeta, m_settings->neta);
     m_device_gyro->setCalibrateFunction( m_settings->gyro_temperature );
 }
 
@@ -615,11 +616,9 @@ void TApplication::receiveCmd() {
         ToggleFlag(m_settings->print_mag, "prnt mode", false);
         break;
 
-    case E_CMD_CODE_TOGGLE_GYRO:
-        //ToggleFlag(m_settings->disable_gyro, "Gyro", true);
+    case E_CMD_CODE_TOGGLE_GYRO:        
         onChangeGyroRange();
-        m_ahrs->setGyroMeas(m_settings->beta, m_settings->disable_gyro? 0 : m_settings->zeta);
-        m_ahrs->setGyroError( m_settings->disable_gyro ? TPoint3F() : m_settings->gyro_zero_offset) ;
+        onSettingsChanged();
         break;
     case E_CMD_CODE_TOGGLE_ACC:
         //onChangeAccRange();
@@ -631,17 +630,22 @@ void TApplication::receiveCmd() {
 
     case E_CMD_CODE_CHANGE_BETA:
         ChagneCoef(m_settings->beta);
-        m_ahrs->setGyroMeas(m_settings->beta,m_settings->zeta);
+        onSettingsChanged();
         break;
 
     case E_CMD_CODE_CHANGE_ZETA:
         ChagneCoef(m_settings->zeta);
-        m_ahrs->setGyroMeas(m_settings->beta,m_settings->zeta);
+        onSettingsChanged();
+        break;
+    case E_CMD_CODE_CHANGE_NETA:
+        ChagneCoef(m_settings->neta);
+        onSettingsChanged();
         break;
     case E_CMD_CODE_LOAD:
         return onCommandLoad();
     case E_CMD_CODE_SAVE:
         return onCommandSave();
+
     case E_CMD_CODE_LOAD_DEFAULT: {
         Serial.println(MSG_DONE);
         uint16_t save_cnt = m_settings->m_save_count;

@@ -11,20 +11,21 @@
 class TAHRSMadgwick{
 public:
 
-    float beta;     //for accelerometer and mag
+    float neta;     //for magnitometer
+    float beta;     //for accelerometer
     float zeta;     //for gyro compensation
 
     //float gama;
 
     TQuaternionF m_q;
     TPoint3F     m_gyro_error;            
-    TPoint3F     m_north_local;
-    float        m_zeta_max_angle;
+    TPoint3F     m_mag_horisontal;
+
 public:
     TAHRSMadgwick();
 
     void setZetaMaxAngle(float value);
-    void setGyroMeas(float error, float drift);
+    void setGyroMeas(float error, float drift, float error_mag);
     void update(TPoint3F gyro, TPoint3F acc, TPoint3F mag, float dt);
     inline TPoint3F getAngles() const { return m_q.getAngles();}
     inline void setGyroError(const TPoint3F& vec) { m_gyro_error = vec;}
@@ -32,9 +33,10 @@ public:
 
 protected:        
     inline void changeOrientation(const TQuaternionF& delta);
-    inline void compensateGyroDrift( const TQuaternionF& s, const TPoint3F& gyro, float dt);
-    inline TQuaternionF correctiveStepAccel(TPoint3F& acc);
-    inline TQuaternionF correctiveStepMag(TPoint3F& mag, bool yaw_only);
+    void compensateGyroDrift( const TQuaternionF& s, const TPoint3F& gyro, float dt);
+    TQuaternionF correctiveStepAccel(TPoint3F& acc, TPoint3F &gyro, const float &dt);
+    TQuaternionF correctiveStepMag(TPoint3F& mag, TPoint3F &gyro, const float &dt);
+    inline TPoint3F removeMagneticVertical(const TPoint3F& mag);
 
 };
 #endif
