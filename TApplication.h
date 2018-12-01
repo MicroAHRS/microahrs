@@ -4,25 +4,27 @@
 //#include <Adafruit_FXAS21002C_termo.h>
 
 #include "shared/Geometry/TPoint3F.h"
-
-#include "A_Sensor.h"
-
-
-
+#include "shared/Function/TFunctionAverageF.h"
+#include "shared/Function/TFunctionLimitedAverage.h"
 // 1.01
 // 1.02 поменялись коды комманды
 // 1.03 Reset Pitch Roll с учетом ориентации сенсора
 // 1.04 отправка сырых даных магнитометра
 // 1.05 ускорение фильтра за одну итерацию - при помощи рассчета углов
 // 1.06 разделены поправки акселерометра и магнетометра, поправка магенитометр вынесена в параметр neta
+// 1.07 yaw компенсирует только магнитометр а roll picth только акселерометр
+// 1.08 усредненные показания перегрузки + автокалибровка
+// 1.09 перегрузка установленна как 5% , алгоритм компенсации дрейфа гироскопа работает только в если проходим через ноль за поределенное время
+//      более точные коэфициенты beta zeta neta - в 2.6 раза надо их увеличить относительно прежних чтобы осталось тоже самое значение
 
-#define AHRS_VERSION "1.06"
+#define AHRS_VERSION "1.09"
 
 class TAppSettings;
 class A_FXAS21002C_termo;
 class A_FXAS21002C;
 class A_FXOS8700;
 class TAHRSMadgwick;
+
 
 class TApplication
 {
@@ -34,9 +36,13 @@ public:
 protected:
     bool init();
     void update(float dt);
-    void updateDevices() ;
+    void updateDevices(float dt) ;
+    void updateCalibration(float dt);
     void updateAHRS(float dt);    
     void updateDriftCoefByAngles();
+
+    void updateCalibrationAcc(float dt);
+    void onCalibrationFinished();
     //void turnLight(bool enabled);
     void printOut();
 
@@ -65,6 +71,8 @@ protected:
     void CalibrateGyroStep1(float max_time);
     void onSettingsChanged();
 
+    bool isCalibrationMode() const {return m_calib_mode_time_cur > 0;}
+
 
 private:
     unsigned long   m_fps;
@@ -79,11 +87,16 @@ private:
     TPoint3F        m_acc_value;
     TPoint3F        m_mag_value;
 
-    TAHRSMadgwick*                m_ahrs;
-    //Adafruit_FXAS21002C_termo    m_device_gyro;
-    A_FXAS21002C_termo*    m_device_gyro;
-    A_FXOS8700*            m_device_accelmag;
-    TAppSettings*                 m_settings;
+    float           m_calib_mode_time_cur; // if > 0 we in caliblrate mode
+
+    TAHRSMadgwick*       m_ahrs;
+    A_FXAS21002C_termo*  m_device_gyro;
+    A_FXOS8700*          m_device_accelmag;
+    TAppSettings*        m_settings;
+
+    TFunctionLimitedAverage<TPoint3F, float, 4> m_avg_acc;
+    TFunctionAverageF    m_avg_acc_length;
+    TFunctionAverageF    m_avg_acc_dispersion;
 };
 
 #endif // TAPPLICATIONARDUINO_H

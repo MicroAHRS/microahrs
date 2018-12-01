@@ -3,7 +3,6 @@ HEADERS += \
     shared/max.hpp \    
     shared/Function/TFunction.h \
     shared/Function/TFunctionLine.h \
-    shared/Function/TFunction3.h \
     shared/Geometry/TPoint3.h \
     shared/Geometry/TQuaternion.h \
     shared/Function/TFunctionLineF.h \
@@ -21,17 +20,25 @@ HEADERS += \
     A_FXOS8700.h \
     A_FXAS21002C.h \
     A_FXAS21002C_termo.h \
-    A_Sensor.h
+    shared/Function/TFunctionAverage.h \
+    shared/Function/TFunctionLinePoint3F.h \
+    shared/Function/TFunctionAverageF.h \
+    shared/Function/TFunctionAveragePoint3F.h \
+    shared/Function/TFunctionLimitedAverage.h \
+    shared/Function/TFunctionLimitedAverageF.h \
+    config.h \
+    TStorage.h
 
 
 SOURCES += \        
     test/test.cpp \
-     TAHRSMadgwick.cpp \
+    TAHRSMadgwick.cpp \
     TApplication.cpp \
     A_FXOS8700.cpp \
     A_FXAS21002C.cpp \
     A_FXAS21002C_termo.cpp \
-    TAppSettings.cpp
+    TAppSettings.cpp \
+    TStorage.cpp
 
 OTHER_FILES += \
     microahrs.ino

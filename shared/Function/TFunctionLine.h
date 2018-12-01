@@ -9,26 +9,26 @@
 
 #include "TFunction.h"
 
-template <class T>
-class TFunctionLine : public TFunction<T>
+template <class TVal, class TArg>
+class TFunctionLine : public TFunction<TVal, TArg>
 {
 public:
 
-    TFunctionLine() {m_k = 0; m_c = 0;}
-    TFunctionLine(T k, T c) {m_k = k; m_c = c;}
-    TFunctionLine(T x1, T y1,T x2, T y2) {
-        T dx = x2 - x1;
-        m_k = dx != 0? (y2 - y1) / dx : 0;
-        m_c = y1 - (x1 * m_k);
+    TFunctionLine() {m_k = (TVal)1; m_c =(TVal) 0;}
+    TFunctionLine(TVal k, TVal c) {m_k = k; m_c = c;}
+    TFunctionLine(TArg x1, TVal y1, TArg x2, TVal y2) {
+        TArg dx = x2 - x1;
+        m_k = (dx != 0) ? (y2 - y1) / dx : (TVal)0;
+        m_c = y1 - (m_k * x1    );
     }
 
-    inline T operator () (const T& param) const {
-        return m_k*param+m_c;
+    TVal operator () (const TArg& param) const {
+        return m_k*param + m_c;
     }
 
 private:
-    T m_k;
-    T m_c;
+    TVal m_k;
+    TVal m_c;
 };
 
 #endif // TFUNCTIONLINE_H

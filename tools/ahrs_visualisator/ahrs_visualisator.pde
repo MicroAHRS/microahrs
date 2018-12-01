@@ -1,8 +1,7 @@
-import processing.serial.*;
+    
 import java.util.Date;
 import java.text.*;
-
-Serial sensor_port;
+import processing.serial.*;
 
 
 float  last_message_time_max = 30.0;
@@ -10,6 +9,7 @@ float  last_message_timer = 0.0;
 String last_message = "Hello";
 
 SensorData  sensor_data = new SensorData();
+Serial      sensor_port;
 
 PrintWriter logger;
 boolean logger_first_line = false;
@@ -36,28 +36,27 @@ void setup()
 }
 
 
-void setupSerial() {
-    
+void setupSerial() {   
     final String OS = platformNames[platform];
     println("OS "+OS);
-    
+   //sensor_data.openPort(OS);    
+   
     int speed = 115200;
     String com_port_name;
     
     if(OS == "linux") {
         com_port_name = "/dev/ttyUSB0"; // Linux "/dev/ttyACM#"       
     } else if(OS == "windows") {
-        com_port_name = "COM5:";     /// Pronin E; Alexey please change here 
-        //com_port_name = "\\\\.\\COM41";   // Windows, COM10 or higher        
+        //com_port_name = "COM5:";     /// Pronin E; Alexey please change here 
+        com_port_name = "\\\\.\\COM11";   // Windows, COM10 or higher        
     } else if(OS == "macos") { 
         com_port_name = "/dev/cu.usbmodem1217321";        
     } else { 
         com_port_name = Serial.list()[0];    // if you have only ONE serial port active      
-        println("Waring! Unknown OS: "+OS);
+        println("Warning! Unknown OS: "+OS);
     }
     
-    sensor_port = new Serial(this, com_port_name, speed);
-    
+    sensor_port = new Serial(this, com_port_name, speed);  
 }
 
 void drawTextCommand() {
@@ -402,8 +401,8 @@ void draw()
     fill(200, 200, 200);
     drawGravityIndicator(width*0.5, height*0.5, 0, 40);
     fill(100, 200, 200);
-    drawGravityIndicator(width*0.5, height*0.5,  - sensor_data.m_g_angle_roll_avg.getAvg(), 20);
-    drawTextIface();
+    drawGravityIndicator(width*0.5, height*0.5,  - sensor_data.m_g_anlge_roll, 20);
+    drawTextIface(); 
 }
 
 void writeLogger() {
@@ -437,7 +436,6 @@ void readLogEvent() {
         e.printStackTrace();
     }
 }
-
 
 void serialEvent()
 {

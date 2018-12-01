@@ -1,0 +1,6 @@
+#define PLATFORM_ARDUINO
+// #define PLATFORM_STM32
+// #define PLATFORM_RASPBERRY
+// #define PLATFORM_DESKTOP
+
+

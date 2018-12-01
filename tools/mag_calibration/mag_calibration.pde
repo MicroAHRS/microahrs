@@ -1,8 +1,7 @@
 import processing.serial.*;
-Serial myPort;
+
 
 float fps;
-Point3F mag_raw = new Point3F();
 Matrix mag_matrix = Matrix.identity(2);
 Point  mag_offset = new Point();
 Point[]  points = new Point[1024];
@@ -14,95 +13,51 @@ boolean is_recording = false;
 
 float FLOAT_FACKTOR = 1000;
 
-
-float yaw = 0.0;
-float pitch = 0.0;
-float roll = 0.0;
-
-
-float accx = 0.0;
-float accy = 0.0;
-float accz = 0.0;
-
-float gerrx = 0.0;
-float gerry = 0.0;
-float gerrz = 0.0;
-
-
-float magx = 0.0;
-float magy = 0.0;
-float magz = 0.0;
-
-float temp = 0.0;
-
-float beta = 0;
-float zeta = 0;
+SensorData  sensor_data = new SensorData();
+Serial sensor_port;
 
 float last_message_time_max = 30.0;
 float last_message_timer = 0.0;
 String last_message = "Hello";
 
-float g=0;
-float g_angle=0;
-float overload=0;
-
 float float_factor = 1000000;
 
 float scale = 450/60;
 
-byte
-    E_CMD_CODE_NONE = 0, 
-    E_CMD_CODE_RESET_PITCH_ROLL      = 1, // сбросить крен тангаж
-    E_CMD_CODE_SET_YAW_BY_MAG        = 2, // установить углы по магнетометру
-    E_CMD_CODE_SET_PITCH_ROLL_BY_ACC = 3, // установить углы по акселерометру
-    E_CMD_CODE_BOOST_FILTER          = 4, // установить углы по акселерометру
-
-    E_CMD_CODE_CHANGE_BETA           = 5, 
-    E_CMD_CODE_CHANGE_ZETA           = 6, 
-
-    E_CMD_CODE_SET_GRAVITY_VECTOR  = 10, // текущее направление силы тяжести принять за 0 (roll pitch)
-    E_CMD_CODE_SET_YAW_NORTH       = 11, // текущее направление на север принять за 0 (yaw)
-
-    E_CMD_CODE_CALIBRATE_GYRO       = 20, 
-    E_CMD_CODE_SET_MAGNITUDE_OFFSET = 21, 
-    E_CMD_CODE_SET_MAGNITUDE_MATRIX = 22, 
-
-    E_CMD_CODE_SET_ACC_OFFSET       = 23, 
-    E_CMD_CODE_SET_ACC_SCALE        = 24, 
-
-    E_CMD_CODE_DEBUG_ACTION         = 30, 
-    E_CMD_CODE_TOGGLE_GYRO          = 31, 
-    E_CMD_CODE_CALIBRATION_STOP     = 32, 
-    E_CMD_CODE_TOGGLE_MAG           = 33, 
-    E_CMD_CODE_TOGGLE_ACC           = 34, 
-
-
-    E_CMD_CODE_SAVE                = 40, 
-    E_CMD_CODE_LOAD                = 41, 
-    E_CMD_CODE_LOAD_DEFAULT        = 42, 
-    E_CMD_CODE_TOGGLE_PRINT_MODE   = 43, 
-
-    the_end = 0
-    ;
-
 
 void setup()
-{
-    size(900, 900, P3D);
-
-    // if you have only ONE serial port active
-    //myPort = new Serial(this, Serial.list()[1], 115200); // if you have only ONE serial port active
-
-    // if you know the serial port name
-    //myPort = new Serial(this, "COM5:", 9600);        // Windows "COM#:"
-    //myPort = new Serial(this, "\\\\.\\COM41", 9600); // Windows, COM10 or higher
-    myPort = new Serial(this, "/dev/ttyUSB0", 115200);   // Linux "/dev/ttyACM#"
-    //myPort = new Serial(this, "/dev/cu.usbmodem1217321", 9600);  // Mac "/dev/cu.usbmodem######"    
+{    
+    size(900, 900, P3D); 
+     setupSerial();
     textSize(16); // set text size
     textMode(SHAPE); // set text mode to shape
 }
 
-Matrix CreateMatrix(double[][] dat) {
+void setupSerial() {   
+    final String OS = platformNames[platform];
+    println("OS "+OS);
+   //sensor_data.openPort(OS);    
+   
+    int speed = 115200;
+    String com_port_name;
+    
+    if(OS == "linux") {
+        com_port_name = "/dev/ttyUSB0"; // Linux "/dev/ttyACM#"       
+    } else if(OS == "windows") {
+        //com_port_name = "COM5:";     /// Pronin E; Alexey please change here 
+        com_port_name = "\\\\.\\COM11";   // Windows, COM10 or higher        
+    } else if(OS == "macos") { 
+        com_port_name = "/dev/cu.usbmodem1217321";        
+    } else { 
+        com_port_name = Serial.list()[0];    // if you have only ONE serial port active      
+        println("Warning! Unknown OS: "+OS);
+    }
+    
+    sensor_port = new Serial(this, com_port_name, speed);  
+}
+
+
+Matrix CreateMatrix(float[][] dat) {
     return  new Matrix(dat);
 }
 
@@ -115,23 +70,23 @@ void mouseWheel(MouseEvent event) {
 }
 
 void SendMagOffset(float x, float y, float z) {
-    myPort.write(E_CMD_CODE_SET_MAGNITUDE_OFFSET);            
-    myPort.write(int(x*float_factor)+" "+int(y*float_factor)+" "+int(z*float_factor)+" ");
+    sensor_port.write(SensorCommands.E_CMD_CODE_SET_MAGNITUDE_OFFSET);            
+    sensor_port.write(int(x*float_factor)+" "+int(y*float_factor)+" "+int(z*float_factor)+" ");
 }
 
 
 void SendMagMatrix(Matrix mtx) {
-    myPort.write(E_CMD_CODE_SET_MAGNITUDE_MATRIX);
+    sensor_port.write(SensorCommands.E_CMD_CODE_SET_MAGNITUDE_MATRIX);
     for (int i=0; i<mtx.M; i++) {
         for (int j=0; j<mtx.N; j++) {
-            myPort.write((int)(mtx.data[i][j]*float_factor)+" ");
+            sensor_port.write((int)(mtx.data[i][j]*float_factor)+" ");
             delay(10);
         }
     }
 }
 
 void keyPressed() {        
-    byte cmd_code = E_CMD_CODE_NONE;
+    byte cmd_code = SensorCommands.E_CMD_CODE_NONE;
 
     //if(key == 'd' || key == 'D')  // force
     //  cmd_code = E_CMD_CODE_DEBUG_ACTION;
@@ -144,7 +99,7 @@ void keyPressed() {
     if (key == '1') {
         showMessage("Send sample calibration");
         SendMagOffset(-72.49, -87.58, 66.34);
-        double[][] dat = { {1.001, 0.026, 0.03 }, 
+        float[][] dat = { {1.001, 0.026, 0.03 }, 
             {0.026, 0.999, -0.001}, 
             {0.003, 0.001, 1.001}
         };
@@ -172,15 +127,15 @@ void keyPressed() {
     }
 
     if (key == 's' || key == 'S')
-        cmd_code = E_CMD_CODE_SAVE;
+        cmd_code = SensorCommands.E_CMD_CODE_SAVE;
     if (key == 'l' || key == 'L')
-        cmd_code = E_CMD_CODE_LOAD;
+        cmd_code = SensorCommands.E_CMD_CODE_LOAD;
     if (key == 'r' || key == 'R')  //recovery
-        cmd_code = E_CMD_CODE_LOAD_DEFAULT;  
+        cmd_code = SensorCommands.E_CMD_CODE_LOAD_DEFAULT;  
 
-    if (cmd_code != E_CMD_CODE_NONE) {
+    if (cmd_code != SensorCommands.E_CMD_CODE_NONE) {
         println( "Send cmd "+cmd_code);
-        myPort.write(cmd_code);
+        sensor_port.write(cmd_code);
     }
 }
 
@@ -204,7 +159,7 @@ void ProcessData() {
 void SendSettings() {
 
     SendMagOffset(mag_offset.x, mag_offset.y, 63.38 - 0.25);
-    double[][] d= {
+    float[][] d= {
         {mag_matrix.data[0][0], mag_matrix.data[0][1], 0 }, 
         {mag_matrix.data[1][0], mag_matrix.data[1][1], 0}, 
         {0, 0, 1}
@@ -239,7 +194,7 @@ void applyOffsetToData(float x, float y) {
 }
 
 Point RotateVector(Matrix mtx, Point p) {
-    double[][] ar2 = {{p.x, p.y}};
+    float[][] ar2 = {{p.x, p.y}};
     Matrix m_p = new Matrix(ar2);                
     Matrix m_p2 = m_p.times(mtx);
     return new Point( (float)m_p2.data[0][0], (float)m_p2.data[0][1]);
@@ -281,8 +236,8 @@ Point FindMaxLenPoint() {
     return pmax;
 }
 
-Matrix CreateScaleMatrix(double scalex, double scaley) {
-    double[][] scale_m_data = {
+Matrix CreateScaleMatrix(float scalex, float scaley) {
+    float[][] scale_m_data = {
         {scalex, 0     }, 
         {0, scaley}        
     };
@@ -302,7 +257,7 @@ void SoftIronCalibration()
     //angle = radians(45);
     println( angle * 180 / PI);
     println( "pmax x= "+ pmax.x + " y= "+pmax.y );
-    double[][] mat_rot1_data = {
+    float[][] mat_rot1_data = {
         {cos(angle), sin(angle)}, 
         {-sin(angle), cos(angle)}        
     };
@@ -317,7 +272,7 @@ void SoftIronCalibration()
     println( "scale "+ scale );
 
     ///////////////////// rotate back ///////////////
-    double[][] d = {
+    float[][] d = {
         {cos(-angle), sin(-angle)}, 
         {-sin(-angle), cos(-angle)}        
     };
@@ -371,11 +326,11 @@ void drawTextIface() {
     y = 0;
     textSize(32);
     fill(100, 100, 100);
-    text("magx " + magx, x, y+=30); 
+    text("sensor_data.m_mag.x " + sensor_data.m_mag_raw.x, x, y+=30); 
     //fill(0, 100, 0);
-    text("magy " + magy, x, y+=30);
+    text("sensor_data.m_mag.y " + sensor_data.m_mag_raw.y, x, y+=30);
     //fill(0, 0, 100);
-    text("magz " + magz, x, y+=30);
+    text("sensor_data.m_mag.z " + sensor_data.m_mag_raw.z, x, y+=30);
 
 
     textSize(32);
@@ -384,7 +339,7 @@ void drawTextIface() {
     //fill(0, 100, 0);
     text("mag_offset_y " + mag_offset.y, x, y+=30);
     //fill(0, 0, 100);
-    //text("mag_offset_y  " + magz, x, y+=30);
+    //text("mag_offset_y  " + sensor_data.m_magz, x, y+=30);
 
 
     float h= 18;
@@ -432,7 +387,7 @@ void drawData()
         line(p1.x * scale, p1.y * scale, p2.x * scale, p2.y * scale);
     }
     
-    p2 = new Point(mag_raw.x, mag_raw.y); 
+    p2 = new Point(sensor_data.m_mag_raw.x, sensor_data.m_mag_raw.y); 
     p2.x -= mag_offset.x;
     p2.y -= mag_offset.y;
     p2 = RotateVector(mag_matrix, p2);
@@ -448,7 +403,7 @@ void drawData()
         line(p1.x * scale, p1.y * scale, p2.x * scale, p2.y * scale);
     }
     
-    p2 = new Point(mag_raw.x, mag_raw.y); 
+    p2 = new Point(sensor_data.m_mag_raw.x, sensor_data.m_mag_raw.y); 
     line(0, 0, p2.x * scale, p2.y * scale);
 
 
@@ -456,7 +411,7 @@ void drawData()
    
     // actual data
     stroke(128, 255, 128);              
-    p2 = new Point(magx, magy); 
+    p2 = new Point(sensor_data.m_mag.x, sensor_data.m_mag.y); 
     line(0, 0, p2.x * scale, p2.y * scale);
     
 }
@@ -468,8 +423,8 @@ void storeData() {
 
     Point p = new Point();
     p.sample_count = 1;
-    p.x = mag_raw.x;
-    p.y = mag_raw.y;
+    p.x = sensor_data.m_mag_raw.x;
+    p.y = sensor_data.m_mag_raw.y;
 
     float angle_delta = PI / 180 * 2;
     float angle = p.getAngle();  
@@ -530,66 +485,28 @@ void showMessage(String message) {
     last_message_timer = last_message_time_max;
 }
 
+
+
 void serialEvent()
 {
+    if(sensor_port == null)
+        return;
     int newLine = 13; // new line character in ASCII
     String message;
     do {
-        message = myPort.readStringUntil(newLine); // read from port until new line
+        message = sensor_port.readStringUntil(newLine); // read from port until new line
         if (message == null)
             break;
 
-        message = trim(message);
-        String[] list = split(message, " ");
-        if (list.length > 15 && list[0].equals("Orient:")) {               
-            roll   = -float(list[1]); // convert to float roll
-            pitch  = float(list[2]); // convert to float pitch
-            yaw    = -float(list[3]) ; // convert to float yaw
-
-            accx = float(list[5]) ; 
-            accy = float(list[6]) ; 
-            accz = float(list[7]) ; 
-
-            temp = float(list[9]);
-
-            gerrx = float(list[11]) / FLOAT_FACKTOR;
-            gerry = float(list[12]) / FLOAT_FACKTOR;
-            gerrz = float(list[13]) / FLOAT_FACKTOR;
-
-            beta = float(list[14]) / FLOAT_FACKTOR;
-            zeta = float(list[15]) / FLOAT_FACKTOR;
-
-            if (list.length > 19) {
-                magx = float(list[17]) ; 
-                magy = float(list[18]) ; 
-                magz = float(list[19]) ;
-            }
-            int l = 20;
-
-            l++;
-            if (list.length >= l) 
-                fps = float(list[l++]) ;     
-
-            l++;
-            if (list.length >= l+3) {        
-                mag_raw.x = float(list[l++]) / FLOAT_FACKTOR;
-                mag_raw.y = float(list[l++]) / FLOAT_FACKTOR;
-                mag_raw.z = float(list[l++]) / FLOAT_FACKTOR;
-            }
-
-            if (yaw <0)
-                yaw += 360;
-
+        message = trim(message);        
+        if (sensor_data.onMessageSensor(message)) {                 
+            //writeLogger();
             storeData();
-            g= sqrt(accx*accx + accy*accy + accz*accz);
-            g_angle = -degrees(atan2( accy, accz));
-            overload = g / 9.8;
             continue;
-        } 
-
-        if (message.length() > 0  ) {
-            showMessage(message);
         }
-        println(message);
+
+        if (message.length() > 0  ) 
+            showMessage(message);        
+        //println(message);
     } while (true);
 }

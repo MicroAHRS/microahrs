@@ -10,6 +10,8 @@
 #include "A_FXAS21002C.h"
 #include "A_FXAS21002C_termo.h"
 
+#include "shared/in_range.hpp"
+
 #include "Arduino.h"
 
 const char* MSG_SPACE = " ";
@@ -22,7 +24,12 @@ const char* MSG_FAIL   = "FAIL";
 const float FLOAT_FACKTOR = 1000;
 const float FLAOT_FACKTOR_READ = 1000000.f;
 
-TApplication::TApplication()   
+const float CALIBRATION_TIME_MAX = 30.f;
+const float CALIBRATION_TIME_ACC_DISPERSION = 20.f;
+const float CALIBRATION_ACC_DIFF_PERCENTS = 5 / 100.f;
+
+TApplication::TApplication()
+    : m_avg_acc(0.2, 0 )
 {
     m_temperature = 0;
     m_print_out_timer = 0;
@@ -31,10 +38,7 @@ TApplication::TApplication()
     //m_light_enabled = false;
     m_seconds_count = 0;
     m_fps = 0;
-}
-
-inline TPoint3F VectorFromEvent(sensors_vec_t vec ) {
-    return TPoint3F(vec.x, vec.y ,vec.z);
+    m_calib_mode_time_cur = 0;
 }
 
 void PrintVector(const TPoint3F& vec) {
@@ -46,14 +50,6 @@ void PrintVector(const TPoint3F& vec) {
     Serial.print(MSG_SPACE);
 }
 
-//void PrintVectorI(const TPoint3F& vec) {
-//    Serial.print(int(vec.x));
-//    Serial.print(" ");
-//    Serial.print(int(vec.y));
-//    Serial.print(" ");
-//    Serial.print(int(vec.z));
-//    Serial.print(" ");
-//}
 void PrintQuaternion(const TQuaternionF& q) {
     Serial.print(q.w);
     Serial.print(MSG_SPACE);
@@ -126,8 +122,9 @@ TPoint3F TApplication::getAcc() {
 
 void TApplication::update(float dt)
 {   
-    updateDevices();    
+    updateDevices(dt);
     updateAHRS(dt);
+    updateCalibration(dt);
 
     m_print_out_timer += dt * 1000;
     while(m_print_out_timer >= PRINTOUT_TIME_MS ) {
@@ -137,34 +134,100 @@ void TApplication::update(float dt)
         m_print_out_timer -= PRINTOUT_TIME_MS;
     }
 }
-#include "shared/in_range.hpp"
-void TApplication::updateDevices() {
+
+void TApplication::updateDevices(float dt) {
     m_device_gyro->getGyro(m_gyro_value, m_temperature);
     m_device_accelmag->getAccMag(m_acc_value, m_mag_value);
+
+    m_avg_acc.put(m_acc_value,dt);
+    m_acc_value = m_avg_acc.getAvarage();
 }
 
+#define CALIBRATE_BETA_START 2.f
+#define CALIBRATE_BETA_END   0.f
+void TApplication::updateCalibration(float dt)
+{
+    if(!isCalibrationMode())
+        return;
+    int prev_time = m_calib_mode_time_cur;
+    m_calib_mode_time_cur -= dt;
+
+    if((int)m_calib_mode_time_cur < prev_time) {
+        Serial.print("...");
+        Serial.println(prev_time);
+        //onCommandBoostFilter();
+    }
+
+    updateCalibrationAcc(dt);
+
+    float progress = GetProgressSection(m_calib_mode_time_cur, 0, CALIBRATION_TIME_MAX);
+    float beta = Lerp(progress, CALIBRATE_BETA_END ,CALIBRATE_BETA_START);
+    float zeta = beta * 0.1f;
+    float neta = beta;
+    m_ahrs->setGyroMeas(beta,zeta,neta);
+    if(m_calib_mode_time_cur <= 0)
+        onCalibrationFinished();
+}
+
+inline float Power2(float x) { return x*x; }
+inline float SafeSQRT(float x) {return (x > 0 )? sqrt(x) : 0;}
+
+void TApplication::updateCalibrationAcc(float dt)
+{
+    TPoint3F acc = getAcc();
+    if(acc.isZero())
+        return;
+
+    float acc_len = acc.length();
+    m_avg_acc_length.put( acc_len, dt);
+//    float avg_len = m_avg_acc_length();
+//    if(m_calib_mode_time_cur < CALIBRATION_TIME_ACC_DISPERSION) {
+//        float avg_delta = Power2(acc_len - avg_len);
+//        m_avg_acc_dispersion.put( avg_delta , dt);
+//    }
+}
+
+void TApplication::onCalibrationFinished() {
+    float avg_len = m_avg_acc_length();
+    float avg_dif = avg_len * CALIBRATION_ACC_DIFF_PERCENTS;
+    //float avg_dif = m_avg_acc_dispersion();
+    //avg_dif = SafeSQRT(avg_dif);
+    //avg_dif *= CALIBRATION_ACC_AVARAGE_DIFF_COEF;
+    m_settings->acc_min_length_sq = Power2(avg_len - avg_dif);
+    m_settings->acc_max_length_sq = Power2(avg_len + avg_dif);
+
+    m_settings->gyro_zero_offset = m_ahrs->m_gyro_error;
+    onSettingsChanged();
+    Serial.println(MSG_DONE);
+
+//    Serial.print(avg_len);
+//    Serial.print(" ");
+//    Serial.print(avg_dif);
+//    Serial.print(" ");
+//    Serial.print(m_settings->acc_min_length_sq);
+//    Serial.print(" ");
+//    Serial.print(m_settings->acc_max_length_sq);
+//    Serial.println(" ");
+}
 
 void TApplication::updateAHRS(float dt) {
     TPoint3F mag = getMagn();
     TPoint3F acc = getAcc();
     TPoint3F gyr = getGyro();
 
-//    if(!m_enable_accel_by_angle)
-//        acc = TPoint3F(0,0,0);
-
-    if(m_settings->disable_mag)
-        mag = TPoint3F(0,0,0);
     if(m_settings->disable_acc)
         acc = TPoint3F(0,0,0);
     if(m_settings->disable_gyro)
         gyr = TPoint3F(0,0,0);
-
 
     m_ahrs->update(gyr,acc,mag,dt);
 }
 
 void TApplication::updateDriftCoefByAngles()
 {
+    if(isCalibrationMode())
+        return;
+
     float acc_len_square = getAcc().lengthSq();
     // if pitch or roll too big
     // set beta to smoler value    
@@ -205,10 +268,10 @@ void TApplication::loop()
 {
     unsigned long ts = millis();
     float dt = ((ts - m_last_update_time) / 1000.0);
-    if(dt < 0.01) {
-      delay(1);
-      return;
-    }
+//    if(dt < 0.01) {
+////      delay(1);
+//      return;
+//    }
 
     m_last_update_time = ts;
 
@@ -217,7 +280,7 @@ void TApplication::loop()
 
     unsigned long seconds_count = int(ts / 1000);
     if(m_seconds_count != seconds_count) {
-        m_fps = m_tick_count / 1.0;
+        m_fps = m_tick_count;
         m_tick_count = 0;
         m_seconds_count = seconds_count;
     }
@@ -247,7 +310,7 @@ void TApplication::printOut() {
         PrintVector(m_ahrs->m_gyro_error * CONVERT_RAD_TO_DPS * FLOAT_FACKTOR);
 
         TPoint3F coefs(m_ahrs->beta, m_ahrs->zeta, m_ahrs->neta);
-        PrintVector(coefs * (FLOAT_FACKTOR * CONVERT_RAD_TO_DPS / 0.866025404));
+        PrintVector(coefs / BETTA_COEF * FLOAT_FACKTOR);
 
         Serial.print("mag: ");
         TPoint3F mag = getMagn();
@@ -318,13 +381,18 @@ void TApplication::onCommandSetMagnitudeVector() {
 
 void TApplication::onCommandCalibrateGyro()
 {
-    TQuaternionF q = m_ahrs->m_q;
-    CalibrateGyroStep1(30);
+    m_settings->disable_gyro = false;
+    m_settings->disable_acc = false;
+    m_settings->disable_mag = false;
+    onCommandBoostFilter();
+    m_calib_mode_time_cur = CALIBRATION_TIME_MAX;
+//    TQuaternionF q = m_ahrs->m_q;
+//    CalibrateGyroStep1(30);
 
-    m_ahrs->setOrientation(q);
-    m_ahrs->setGyroError(m_settings->gyro_zero_offset);
-    m_ahrs->setGyroMeas(m_settings->beta, m_settings->zeta, m_settings->neta);
-    Serial.println(MSG_DONE);
+//    m_ahrs->setOrientation(q);
+//    m_ahrs->setGyroError(m_settings->gyro_zero_offset);
+//    m_ahrs->setGyroMeas(m_settings->beta, m_settings->zeta, m_settings->neta);
+//    Serial.println(MSG_DONE);
 }
 
 void TApplication::CalibrateGyroCycle(float beta_start, float beta_end, float max_time, bool verbose)
@@ -356,7 +424,7 @@ void TApplication::CalibrateGyroCycle(float beta_start, float beta_end, float ma
         float beta = Lerp(GetProgressSection(time,0,max_time), beta_start, beta_end);        
         float zeta = beta * 0.1;
         m_ahrs->setGyroMeas(beta,zeta,beta);
-        updateDevices();
+        updateDevices(dt);
         TPoint3F gyr = getGyro();
         m_ahrs->update(gyr, gravity, mag, dt);
     }
@@ -396,16 +464,15 @@ void TApplication::onCommandSetMagnitudeMatrix() {
     }
     Serial.println();
 }
-#define BETA_START 1
-#define BETA_END 0
+
 void TApplication::onCommandBoostFilter() {    
-    //ускорить фильтр - чтобы выровнить ориентацию
-    updateDevices();
+    //ускорить фильтр - чтобы выровнить ориентацию    
     TPoint3F acc;
     TPoint3F mag;
     TPoint3F gyr;
     int samples_count = 10;
     for(int i=0;i<samples_count;i++) {
+        updateDevices(0.01);
         acc += getAcc();
         mag += getMagn();
         gyr += getGyro();
@@ -473,7 +540,7 @@ void TApplication::onCommandDebugAction()
         roll = -45;
         break;
     case 2:
-        roll = 45;
+        roll = 45   ;
         break;
     }
 
@@ -497,12 +564,12 @@ void TApplication::onCommandDebugAction()
     default:
         break;
     }
-    if(variant >= 16)
+    if(variant >= 3)
         variant = 0;
 
     //m_ahrs->setGyroError(TPoint3F(0,0,0));
     m_ahrs->setOrientation(TQuaternionF::CreateFormAngles(roll * CONVERT_DPS_TO_RAD, pitch* CONVERT_DPS_TO_RAD, yaw* CONVERT_DPS_TO_RAD));
-    m_ahrs->setGyroError(m_settings->gyro_zero_offset);
+    //m_ahrs->setGyroError(m_settings->gyro_zero_offset);
 }
 
 inline void ChangeRangeFlags(uint8_t& range, const uint8_t& range_count, bool& disable) {
@@ -553,7 +620,7 @@ void ToggleFlag(bool& flag, const char* name, bool inverse)
 
 void ChagneCoef(float& coef)
 {
-    coef *= 2;
+    coef *= 1.5;
     if(coef >= 100)
         coef = 0;
     else

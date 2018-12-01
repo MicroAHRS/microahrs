@@ -2,10 +2,10 @@
 #define TFUNCTION_H
 
 
-template <class T>
+template <class TVal, class TArg>
 class TFunction {
 public:
-    inline T operator () (const T& param) const {return param;}
+    TVal operator () (const TArg& param) const  {return TVal(0);}
 };
 
 #endif // TFUNCTION_H

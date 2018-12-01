@@ -1,15 +1,14 @@
-
+// install it2c https://learn.sparkfun.com/tutorials/raspberry-pi-spi-and-i2c-tutorial/all
 
 #include "../shared/Geometry/TQuaternionF.h"
 #include "../shared/Geometry/TPoint3F.h"
 
-#include "../shared/Function/TFunction3.h"
 #include "../shared/Function/TFunctionLineF.h"
 
 #include <math.h>
 
 
-typedef TFunction3< TFunctionLineF , float> TFunctionCalibrate;
+//typedef TFunction3< TFunctionLineF , float> TFunctionCalibrate;
 
 
 TQuaternionF InitWithAngles ( float yaw, float pitch, float roll )
@@ -56,7 +55,24 @@ float DegToRad(float v) {
 }
 
 #include "stdio.h"
+#include "shared/Geometry/TPoint3F.h"
+#include "shared/Function/TFunctionAveragePoint3F.h"
+#include "shared/Function/TFunctionAverageF.h"
+#include "shared/Function/TFunctionLimitedAverage.h"
+
 int main() {
+    TFunctionLimitedAverage<TPoint3F,float,4> speed_avg(1);
+    float time;
+    for(time =0; time < 4;) {
+        float dt = 0.01;
+        time += dt;
+        float speed = 5;
+        if(time > 3)
+            speed = 10;
+        speed_avg.put(TPoint3F(speed),dt );
+
+        printf("t = %f , avg speed = %f\n", time, speed_avg().x);
+    }
 
 
 //    TQuaternionF q = InitWithAngles( DegToRad(45), 0,  0);

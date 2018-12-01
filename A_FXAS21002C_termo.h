@@ -2,13 +2,13 @@
 #define ADAFRUIT_FXAS21002C_TERMO_H
 
 #include "A_FXAS21002C.h"
-#include "shared/Function/TFunctionLineF.h"
-#include "shared/Function/TFunction3.h"
+//#include "shared/Function/TFunctionLineF.h"
+#include "shared/Function/TFunctionLinePoint3F.h"
 
 class A_FXAS21002C_termo: public A_FXAS21002C
 {
 public:
-    typedef TFunction3< TFunctionLineF , float> TFunctionCalibrate;
+    typedef TFunctionLinePoint3F TFunctionCalibrate;
     A_FXAS21002C_termo();
 
     inline void setCalibrateFunction(const TFunctionCalibrate& f)  { m_gyro_zero_avg = f; }

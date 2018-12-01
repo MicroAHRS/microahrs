@@ -1,23 +1,32 @@
 final public class Matrix {
     public final int M;             // number of rows
     public final int N;             // number of columns
-    public final double[][] data;   // M-by-N array
+    public final float[][] data;   // M-by-N array
 
     // create M-by-N matrix of 0's
     public Matrix(int M, int N) {
         this.M = M;
         this.N = N;
-        data = new double[M][N];
+        data = new float[M][N];
     }
 
     // create matrix based on 2d array
-    public Matrix(double[][] data) {
+    public Matrix(float[][] data) {
         M = data.length;
         N = data[0].length;
-        this.data = new double[M][N];
+        this.data = new float[M][N];
         for (int i = 0; i < M; i++)
             for (int j = 0; j < N; j++)
                     this.data[i][j] = data[i][j];
+    }
+    
+    public Matrix(Point3F point) {
+        M = 1;
+        N = 3;
+        data = new float[M][N];
+        data[0][0] = point.x;
+        data[0][1] = point.y;
+        data[0][2] = point.z;
     }
 
     // copy constructor
@@ -28,7 +37,7 @@ final public class Matrix {
         Matrix A = new Matrix(M, N);
         for (int i = 0; i < M; i++)
             for (int j = 0; j < N; j++)
-                A.data[i][j] = Math.random();
+                A.data[i][j] = (float)Math.random();
         return A;
     }
 
@@ -42,7 +51,7 @@ final public class Matrix {
 
     // swap rows i and j
     private void swap(int i, int j) {
-        double[] temp = data[i];
+        float[] temp = data[i];
         data[i] = data[j];
         data[j] = temp;
     }
@@ -131,18 +140,18 @@ final public class Matrix {
 
             // pivot within A
             for (int j = i + 1; j < N; j++) {
-                double m = A.data[j][i] / A.data[i][i];
+                float m = A.data[j][i] / A.data[i][i];
                 for (int k = i+1; k < N; k++) {
                     A.data[j][k] -= A.data[i][k] * m;
                 }
-                A.data[j][i] = 0.0;
+                A.data[j][i] = (float)0.0;
             }
         }
 
         // back substitution
         Matrix x = new Matrix(N, 1);
         for (int j = N - 1; j >= 0; j--) {
-            double t = 0.0;
+            float t = 0.0F;
             for (int k = j + 1; k < N; k++)
                 t += A.data[j][k] * x.data[k][0];
             x.data[j][0] = (b.data[j][0] - t) / A.data[j][j];
@@ -150,60 +159,49 @@ final public class Matrix {
         return x;
    
     }
-
-    // print matrix to standard output
-    //public void show() {
-    //    for (int i = 0; i < M; i++) {
-    //        for (int j = 0; j < N; j++) 
-    //            print(nf((float)(data[i][j]),9,4));
-    //        println();
-    //    }
-    //}
-
-
-
-//    // test client
-//    public static void main(String[] args) {
-//        double[][] d = { { 1, 2, 3 }, { 4, 5, 6 }, { 9, 1, 3} };
-//        Matrix D = new Matrix(d);
-//        //D.show();        
-//        StdOut.println();
-
-//        Matrix A = Matrix.random(5, 5);
-//        A.show(); 
-//        StdOut.println();
-
-//        A.swap(1, 2);
-//        A.show(); 
-//        StdOut.println();
-
-//        Matrix B = A.transpose();
-//        B.show(); 
-//        StdOut.println();
-
-//        Matrix C = Matrix.identity(5);
-//        C.show(); 
-//        StdOut.println();
-
-//        A.plus(B).show();
-//        StdOut.println();
-
-//        B.times(A).show();
-//        StdOut.println();
-
-//        // shouldn't be equal since AB != BA in general    
-//        StdOut.println(A.times(B).eq(B.times(A)));
-//        StdOut.println();
-
-//        Matrix b = Matrix.random(5, 1);
-//        b.show();
-//        StdOut.println();
-
-//        Matrix x = A.solve(b);
-//        x.show();
-//        StdOut.println();
-
-//        A.times(x).show();
-        
-//    }
+    public Point3F convertToPoint() {
+        assert(M == 1);
+        assert(N == 3);
+        return new Point3F(data[0][0],data[0][1],data[0][2]);
+    }
+    
+    
+    public Point3F rotatePoint(Point3F point) {        
+        Matrix point_m = new Matrix(point);       
+        return point_m.times(this).convertToPoint();
+    }  
+    
+    
+    public static Matrix GetRollMatrix(float a) 
+    {    
+        float[][] d = { 
+            {1, 0, 0}, 
+            {0, (float)Math.cos(a), (float)-Math.sin(a)}, 
+            {0, (float)Math.sin(a), (float)Math.cos(a)}       
+        };
+        return new Matrix(d);
+    }
+    
+    public static Matrix GetPitchMatrix(float a) 
+    {    
+        float[][] d = { 
+            {(float)Math.cos(a), 0, (float)Math.sin(a)}, 
+            {0, 1, 0}, 
+            {-(float)Math.sin(a), 0, (float)Math.cos(a)}       
+        };
+        return new Matrix(d);
+    }
 }
+
+
+
+ //float c1 = cos(radians(roll));
+    //float s1 = sin(radians(roll));
+    //float c2 = cos(radians(pitch * 0));
+    //float s2 = sin(radians(pitch * 0));
+    //float c3 = cos(radians(90));
+    //float s3 = sin(radians(90));
+    //applyMatrix( c2*c3, s1*s3+c1*c3*s2, c3*s1*s2-c1*s3, 0,
+    //             -s2, c1*c2, c2*s1, 0,
+    //             c2*s3, c1*s2*s3-c3*s1, c1*c3+s1*s2*s3, 0,
+    //             0, 0, 0, 1);

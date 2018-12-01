@@ -18,7 +18,6 @@
 #include "Arduino.h"
 #include <Wire.h>
 //#include <limits.h>
-
 #include "A_FXOS8700.h"
 
 #define ACCEL_MG_LSB_2G (0.000244F)

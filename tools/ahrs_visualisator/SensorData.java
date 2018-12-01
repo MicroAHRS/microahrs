@@ -3,6 +3,7 @@ import java.text.*;
 import processing.core.PApplet;
 
 
+
 final public class SensorData {    
     Point3F m_angles = new Point3F();
     Point3F m_acc = new Point3F();       
@@ -36,6 +37,11 @@ final public class SensorData {
     float  m_fps= 0;
     String m_time;
     
+    interface Callback{
+        void onDataChanged();
+        void onMessageText(String s);
+    };
+    public Callback m_callback;
     
     Matrix m_orient_mtx;
     
@@ -48,6 +54,10 @@ final public class SensorData {
         };
         m_orient_mtx = new Matrix(d);
     }
+    
+
+    
+   
         
         
     private float FLOAT_FACKTOR = 1;
@@ -166,7 +176,7 @@ final public class SensorData {
         
         m_angles.y *= -1;
         m_angles.z *= -1; 
-        m_gerr.y *= -1;
+        m_gerr.x *= -1;
         m_gerr.y *= -1;
         
         m_angles.z -=180;
@@ -188,8 +198,8 @@ final public class SensorData {
     
     private void onDataCanged() {
         m_acc  = m_acc_avg.avg(m_acc);
-        m_mag  = m_mag_avg.avg(m_mag);
-        m_gerr = m_gerr_avg.avg(m_gerr);
+        //m_mag  = m_mag_avg.avg(m_mag);
+        //m_gerr = m_gerr_avg.avg(m_gerr);
          
         m_g = m_acc.len();
         m_g_anlge_roll  = processing.core.PApplet.degrees((float)Math.atan2( m_acc.y, m_acc.z));
@@ -205,8 +215,8 @@ final public class SensorData {
         float mag_err = processing.core.PApplet.degrees((float)Math.atan2(m_north_local.y, m_north_local.x)); 
         mag_err = m_mag_err_avg.avg(mag_err);
         m_mag_angle_yaw = m_angles.z + mag_err;        
-                
-        m_g_angle_roll_avg.avg(m_g_anlge_roll);        
+          
+        //m_mag_angle_yaw = m_g_angle_roll_avg.avg(m_g_anlge_roll);        
     }
 
     public boolean onMessageSensor(String message) {

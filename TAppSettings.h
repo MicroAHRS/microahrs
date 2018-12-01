@@ -4,8 +4,7 @@
 #include "shared/Geometry/TMatrix3F.h"
 #include "shared/Geometry/TPoint3F.h"
 #include "shared/Geometry/TQuaternionF.h"
-#include "shared/Function/TFunction3.h"
-#include "shared/Function/TFunctionLineF.h"
+#include "shared/Function/TFunctionLinePoint3F.h"
 
 #include "A_FXOS8700.h"
 #include "A_FXAS21002C.h"
@@ -21,9 +20,12 @@ public:
     bool load();
     bool save();
 
+    uint8_t getVersion() const {return 1;}
 public:
+    uint8_t version;
     float beta;    
     float zeta;        
+    float neta;
 
     bool disable_gyro;
     bool disable_acc;
@@ -34,7 +36,6 @@ public:
     float acc_max_length_sq;
     float acc_min_length_sq;
 
-    float neta;
     float roll_max;
 
     // mag calibration
@@ -43,7 +44,7 @@ public:
     // gyro calibration
     uint8_t   gyro_mode;
     TPoint3F  gyro_zero_offset;
-    TFunction3< TFunctionLineF , float> gyro_temperature;
+    TFunctionLinePoint3F gyro_temperature;
     // acc colibration
     TPoint3F  acc_zero_offset;
     TPoint3F  acc_scale;
@@ -55,6 +56,8 @@ public:
 
     uint32_t m_crc;
     uint16_t m_save_count;
+
+
 };
 
 #endif // TAPPSETTINGS_H

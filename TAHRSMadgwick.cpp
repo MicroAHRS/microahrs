@@ -24,8 +24,14 @@
 #define gyroMeasErrorMag 1
 #define gyroMeasError    1   // gyroscope measurement error in rad/s (shown as 5 deg/s)
 #define gyroMeasDrift 0.05f // gyroscope measurement error in rad/s/s (shown as 0.2f deg/s/s)
+//#define gyroMeasCoef  0.8660254038
+
+
 #define GRAVITY_VECTOR TPoint3F(0,0,1)
 #define MAGNITUDE_VECTOR TPoint3F(1,0,0)
+
+#define GYRO_COPNESATION_MIN_TIME  2
+#define GYRO_COPNESATION_MAX_TIME  300
 //============================================================================================
 // Functions
 
@@ -33,6 +39,10 @@
 // AHRS algorithm update
 
 TAHRSMadgwick::TAHRSMadgwick()
+    : m_q()
+#ifdef GYRO_COPNESATION_AVARAGE
+    ,m_gyro_avg_f(10, 1)
+#endif
 {
     setGyroMeas(gyroMeasError, gyroMeasDrift, gyroMeasErrorMag);
     setOrientation(TQuaternionF( 1.0f, 0, 0, 0));    
@@ -47,9 +57,12 @@ TAHRSMadgwick::TAHRSMadgwick()
 
 void TAHRSMadgwick::setGyroMeas(float error, float drift,float error_mag)
 {
-    beta = sqrt(3.0f / 4.0f) * error * CONVERT_DPS_TO_RAD;
-    zeta = sqrt(3.0f / 4.0f) * drift * CONVERT_DPS_TO_RAD;
-    neta = sqrt(3.0f / 4.0f) * error_mag * CONVERT_DPS_TO_RAD;
+    //0.8660254038 = sqrt(3.0f / 4.0f)
+    //float coef = sqrt(3.0f / 4.0f) * CONVERT_DPS_TO_RAD;
+
+    beta = BETTA_COEF * error;
+    zeta = BETTA_COEF * drift;
+    neta = BETTA_COEF * error_mag;
 }
 
 static inline TPoint3F compensateMagneticDistortion(
@@ -120,10 +133,35 @@ static inline bool SameSign(const float& x, const float& y) {
     return (x >= 0) ^ (y < 0);
 }
 
+static float CompensateGyroChannel(const float& gyro, const float& err_delta, float& err_delta_first, float& err_time  , const float& dt)
+{
+    if(gyro == 0)
+        return 0;
+
+#ifdef GYRO_COPNESATION_TIME
+    // time of swicth sign
+    if(!SameSign(err_delta, err_delta_first)) {
+        err_time = 0;
+        err_delta_first = err_delta;
+    }
+    err_time += dt;
+
+    if(InRange(err_time, GYRO_COPNESATION_MIN_TIME, GYRO_COPNESATION_MAX_TIME))
+        return 0;
+#endif
+
+#ifdef GYRO_COPNESATION_SLOWDOWN
+    if(!SameSign(err_delta, gyro))
+        return 0;
+#endif
+
+    return err_delta;
+}
+
 void TAHRSMadgwick::compensateGyroDrift(
-        const TQuaternionF& s,     // поправка кватрениона c отрицательным знаком
-        const TPoint3F& gyro,
-        float dt)
+        const TQuaternionF& s,     // поправка кватрениона
+        const TPoint3F& gyro,      // показания гиросокпа , 0 если канал отключен
+        const float& dt)
 {   
     TQuaternionF& q = m_q; //just reference
 
@@ -137,45 +175,35 @@ void TAHRSMadgwick::compensateGyroDrift(
     err.x = q.w * s.x - q.x * s.w -  q.y * s.z + q.z * s.y;
     err.y = q.w * s.y + q.x * s.z -  q.y * s.w - q.z * s.x;
     err.z = q.w * s.z - q.x * s.y +  q.y * s.x - q.z * s.w;
-    err *= 2.0f;
-    float coef = dt * zeta;
-
-    //if(SameSign(err.x, gyro.x) && m_angle_dest.x > m_zeta_max_angle)
-    if(SameSign(err.x, gyro.x))
-        m_gyro_error.x += err.x * coef;
-
-    //if(SameSign(err.y, gyro.y)  && m_angle_dest.y > m_zeta_max_angle)
-    if(SameSign(err.y, gyro.y))
-        m_gyro_error.y += err.y * coef;
-
-    //if(SameSign(err.z, gyro.z)  && m_angle_dest.z > m_zeta_max_angle)
-    if(SameSign(err.z, gyro.z))
-        m_gyro_error.z += err.z * coef;
+    err *= 2.0f * dt * zeta;
+    m_gyro_error.x += CompensateGyroChannel(gyro.x , err.x , m_gyro_err_direction.x , m_gyro_err_switch_time.x , dt);
+    m_gyro_error.y += CompensateGyroChannel(gyro.y , err.y , m_gyro_err_direction.y , m_gyro_err_switch_time.y , dt);
+    m_gyro_error.z += CompensateGyroChannel(gyro.z , err.z , m_gyro_err_direction.z , m_gyro_err_switch_time.z , dt);
 }
 
-#define AXIS_X 0
-#define AXIS_Y 1
-#define AXIS_Z 2
+//#define AXIS_X 0
+//#define AXIS_Y 1
+//#define AXIS_Z 2
 
-float ComputeVectorAngle(TPoint3F p1, TPoint3F p2, const short a)
-{
-    switch (a) {
-    case AXIS_X:
-        p1.x= p2.x= 0;
-        break;
-    case AXIS_Y:
-        p1.y= p2.y= 0;
-        break;
-    case AXIS_Z:
-        p1.z= p2.z= 0;
-        break;
-    }
-    p1.normalize();
-    p2.normalize();
-    return p1.dot_product(p2);
-}
+//float ComputeVectorAngle(TPoint3F p1, TPoint3F p2, const short a)
+//{
+//    switch (a) {
+//    case AXIS_X:
+//        p1.x= p2.x= 0;
+//        break;
+//    case AXIS_Y:
+//        p1.y= p2.y= 0;
+//        break;
+//    case AXIS_Z:
+//        p1.z= p2.z= 0;
+//        break;
+//    }
+//    p1.normalize();
+//    p2.normalize();
+//    return p1.dot_product(p2);
+//}
 
-TQuaternionF TAHRSMadgwick::correctiveStepAccel(TPoint3F& acc,TPoint3F& gyro, const float& dt)
+TQuaternionF TAHRSMadgwick::correctiveStepAccel(TPoint3F& acc, const float& dt)
 {
     TQuaternionF result;
     if(acc.isZero())
@@ -187,7 +215,7 @@ TQuaternionF TAHRSMadgwick::correctiveStepAccel(TPoint3F& acc,TPoint3F& gyro, co
 
     if(!result.isZero())  {
         result.normalize();
-        compensateGyroDrift(result, gyro, dt);
+        compensateGyroDrift(result, TPoint3F(m_gyro_avg.x, m_gyro_avg.y, 0), dt);
         result *= beta;
     }
 
@@ -206,7 +234,7 @@ inline TPoint3F TAHRSMadgwick::removeMagneticVertical(const TPoint3F& mag)
     return m_q.rotateVector(result);
 }
 
-TQuaternionF TAHRSMadgwick::correctiveStepMag(TPoint3F& mag, TPoint3F &gyro, const float &dt)
+TQuaternionF TAHRSMadgwick::correctiveStepMag(TPoint3F& mag, const float &dt)
 {
     TQuaternionF result;
     if(mag.isZero())
@@ -224,27 +252,39 @@ TQuaternionF TAHRSMadgwick::correctiveStepMag(TPoint3F& mag, TPoint3F &gyro, con
     result = addGradientDescentStep(m_q, MAGNITUDE_VECTOR, mag, dest_local);
     if(!result.isZero())  {
         result.normalize();
-        compensateGyroDrift(result, gyro, dt);
+        compensateGyroDrift(result, TPoint3F(0, 0, m_gyro_avg.z), dt);
         result *= neta;
     }
     return result;
 }
 
+void TAHRSMadgwick::updateGyroAverage(TPoint3F& gyro, float dt)
+{
+#ifdef GYRO_COPNESATION_AVARAGE
+    m_gyro_avg_f.put(gyro, dt);
+    m_gyro_avg = m_gyro_avg_f() - m_gyro_error;
+#endif
+    gyro -= m_gyro_error;
 
+#ifndef GYRO_COPNESATION_AVARAGE
+    m_gyro_avg = gyro;
+#endif
+}
 //////////////////////////////////////////////////////////////////
 
 void TAHRSMadgwick::update(TPoint3F gyro, TPoint3F acc, TPoint3F mag, float dt)
-{
-    gyro -= m_gyro_error;
+{    
+    updateGyroAverage(gyro, dt);
     TQuaternionF q_dot(0,0,0,0);
-    q_dot -= correctiveStepAccel(acc, gyro, dt);
-    q_dot -= correctiveStepMag(mag, gyro, dt);
+    q_dot -= correctiveStepAccel(acc, dt);
+    q_dot -= correctiveStepMag(mag, dt);
     q_dot += orientationChangeFromGyro(m_q, gyro);    
     changeOrientation(q_dot * dt);       
 }
 
 inline void TAHRSMadgwick::changeOrientation(const TQuaternionF& delta)
 {
+// TODO chek for NAN
     m_q += delta;
     m_q.normalize();    
 }
