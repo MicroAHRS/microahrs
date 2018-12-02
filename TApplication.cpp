@@ -329,7 +329,7 @@ void TApplication::printOut() {
     Serial.println();
 
     if(m_device_gyro->m_too_slow) {
-        Serial.println(m_device_gyro->m_too_slow);
+        //Serial.println(m_device_gyro->m_too_slow);
         m_device_gyro->m_too_slow = 0;
     }
 
