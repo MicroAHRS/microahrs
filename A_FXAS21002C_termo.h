@@ -13,7 +13,7 @@ public:
 
     inline void setCalibrateFunction(const TFunctionCalibrate& f)  { m_gyro_zero_avg = f; }
 
-    bool getGyro         ( TPoint3F& gyro, float& temp );
+    bool getGyro         ( TPoint3F& gyro);
 
     /*
      * Set linear function represent gyro zero output ( temperature)

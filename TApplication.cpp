@@ -28,8 +28,11 @@ const float CALIBRATION_TIME_MAX = 30.f;
 const float CALIBRATION_TIME_ACC_DISPERSION = 20.f;
 const float CALIBRATION_ACC_DIFF_PERCENTS = 5 / 100.f;
 
+
+const float ACCEL_UPDATE_TIME = 0.04f; // 25 hz update accel
+
 TApplication::TApplication()
-    : m_avg_acc(0.2, 0 )
+    : m_avg_acc(0.5, 0 )
 {
     m_temperature = 0;
     m_print_out_timer = 0;
@@ -39,6 +42,7 @@ TApplication::TApplication()
     m_seconds_count = 0;
     m_fps = 0;
     m_calib_mode_time_cur = 0;
+    m_acc_dt = 0;
 }
 
 void PrintVector(const TPoint3F& vec) {
@@ -107,7 +111,7 @@ bool TApplication::init()
 
 
 
-TPoint3F TApplication::getMagn() {
+TPoint3F TApplication::getMagn() const {
     if(m_settings->disable_mag )
         return TPoint3F();
     TPoint3F mag_vec = m_mag_value - m_settings->mag_offset;
@@ -115,7 +119,7 @@ TPoint3F TApplication::getMagn() {
 }
 
 
-TPoint3F TApplication::getAcc() {
+TPoint3F TApplication::getAcc() const {
     //return (VectorFromEvent(accel_event.acceleration) - m_settings->acc_zero_offset).scale(m_settings->acc_scale);
     return (m_acc_value - m_settings->acc_zero_offset).scale(m_settings->acc_scale);
 }
@@ -136,11 +140,16 @@ void TApplication::update(float dt)
 }
 
 void TApplication::updateDevices(float dt) {
-    m_device_gyro->getGyro(m_gyro_value, m_temperature);
-    m_device_accelmag->getAccMag(m_acc_value, m_mag_value);
+    m_device_gyro->getGyro(m_gyro_value);
 
-    m_avg_acc.put(m_acc_value,dt);
-    m_acc_value = m_avg_acc.getAvarage();
+    m_acc_dt += dt;
+    if(m_acc_dt >= ACCEL_UPDATE_TIME) {
+        m_device_gyro->getTemp(m_temperature);
+        m_device_accelmag->getAccMag(m_acc_value, m_mag_value);
+        m_avg_acc.put(m_acc_value, m_acc_dt);
+        m_acc_value = m_avg_acc.getAvarage();
+    }
+
 }
 
 #define CALIBRATE_BETA_START 2.f
@@ -165,6 +174,7 @@ void TApplication::updateCalibration(float dt)
     float zeta = beta * 0.1f;
     float neta = beta;
     m_ahrs->setGyroMeas(beta,zeta,neta);
+    m_ahrs->resetGyroErrorSwitchTime();
     if(m_calib_mode_time_cur <= 0)
         onCalibrationFinished();
 }
@@ -199,28 +209,21 @@ void TApplication::onCalibrationFinished() {
     m_settings->gyro_zero_offset = m_ahrs->m_gyro_error;
     onSettingsChanged();
     Serial.println(MSG_DONE);
-
-//    Serial.print(avg_len);
-//    Serial.print(" ");
-//    Serial.print(avg_dif);
-//    Serial.print(" ");
-//    Serial.print(m_settings->acc_min_length_sq);
-//    Serial.print(" ");
-//    Serial.print(m_settings->acc_max_length_sq);
-//    Serial.println(" ");
 }
 
 void TApplication::updateAHRS(float dt) {
     TPoint3F mag = getMagn();
-    TPoint3F acc = getAcc();
-    TPoint3F gyr = getGyro();
+    TPoint3F acc = getAcc();    
 
-    if(m_settings->disable_acc)
-        acc = TPoint3F(0,0,0);
-    if(m_settings->disable_gyro)
-        gyr = TPoint3F(0,0,0);
+    if(m_acc_dt >= ACCEL_UPDATE_TIME) {
+        if(m_settings->disable_acc)
+            acc = TPoint3F(0,0,0);
+        m_ahrs->updateAccMag(acc,mag,m_acc_dt);
+        m_acc_dt = 0;
+    }
 
-    m_ahrs->update(gyr,acc,mag,dt);
+    if(!m_settings->disable_gyro)
+        m_ahrs->updateGyro(getGyro(),dt);
 }
 
 void TApplication::updateDriftCoefByAngles()
@@ -324,6 +327,12 @@ void TApplication::printOut() {
         PrintVector(m_ahrs->m_mag_horisontal * FLOAT_FACKTOR );
     }
     Serial.println();
+
+    if(m_device_gyro->m_too_slow) {
+        Serial.println(m_device_gyro->m_too_slow);
+        m_device_gyro->m_too_slow = 0;
+    }
+
 
     //Serial.print("q_dor: ");
     //PrintQuaternion(m_ahrs->m_q_dot * 1000);

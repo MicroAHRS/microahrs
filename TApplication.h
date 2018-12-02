@@ -17,7 +17,10 @@
 // 1.09 перегрузка установленна как 5% , алгоритм компенсации дрейфа гироскопа работает только в если проходим через ноль за поределенное время
 //      более точные коэфициенты beta zeta neta - в 2.6 раза надо их увеличить относительно прежних чтобы осталось тоже самое значение
 
-#define AHRS_VERSION "1.09"
+// 1.10 смена частоты опроса - гироскоп 400 герц, акселерометр и магнитометр 25 герц.
+//      ускорение частоты цикла с 140 до 380
+
+#define AHRS_VERSION "1.10"
 
 class TAppSettings;
 class A_FXAS21002C_termo;
@@ -46,10 +49,10 @@ protected:
     //void turnLight(bool enabled);
     void printOut();
 
-    TPoint3F getAcc();
-    TPoint3F getMagn();
-    TPoint3F getGyro() {return m_gyro_value;}
-    float getTemperature() {return m_temperature;}
+    TPoint3F getAcc() const;
+    TPoint3F getMagn() const;
+    TPoint3F getGyro() const {return m_gyro_value;}
+    float getTemperature() const {return m_temperature;}
 
     inline void onCommandResetPitchRoll();
     inline void onCommandSetYawByMag();
@@ -86,6 +89,7 @@ private:
     TPoint3F        m_gyro_value;
     TPoint3F        m_acc_value;
     TPoint3F        m_mag_value;
+    float           m_acc_dt;
 
     float           m_calib_mode_time_cur; // if > 0 we in caliblrate mode
 

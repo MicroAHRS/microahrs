@@ -18,14 +18,13 @@
 #define __FXOS8700_H__
 
 #include "shared/Geometry/TPoint3F.h"
-#include "Arduino.h"
+
 #include <stdint.h>
 
 //#include "A_Sensor.h"
 //#include <Wire.h>
 
-#define FXOS8700_ADDRESS           (0x1F)     // 0011111
-#define FXOS8700_ID                (0xC7)     // 1100 0111
+
 
 enum EFXOS8700Register
 {                                             // DEFAULT    TYPE

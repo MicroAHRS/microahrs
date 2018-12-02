@@ -1,26 +1,10 @@
-/***************************************************
-  This is a library for the FXAS21002C GYROSCOPE
+// see https://www.nxp.com/docs/en/data-sheet/FXAS21002.pdf
 
-  Designed specifically to work with the Adafruit FXAS21002C Breakout
-  ----> https://www.adafruit.com/products/
-
-  These sensors use I2C to communicate, 2 pins (I2C)
-  are required to interface.
-
-  Adafruit invests time and resources providing this open source code,
-  please support Adafruit and open-source hardware by purchasing
-  products from Adafruit!
-
-  Written by Kevin "KTOWN" Townsend for Adafruit Industries.
-  BSD license, all text above must be included in any redistribution
- ****************************************************/
-
-#include "Arduino.h"
-#include <Wire.h>
 //#include <limits.h>
 
 #include "A_FXAS21002C.h"
 
+#include "config.h"
 
 
 /*=========================================================================
@@ -45,6 +29,80 @@ typedef enum
 } gyroRegisters_t;
 /*=========================================================================*/
 
+#pragma pack(push,1)
+
+union TReg_CTRL_REG_0
+{
+    uint8_t data;
+    struct {
+        uint8_t  fullscale_range:2;
+        uint8_t  hipass_filter_enable:1;
+        uint8_t  hipass_filter_selection:2;
+        uint8_t  spi_mode:1;   // 0 - 4 wire mode,  1 - 3 wire mode
+        uint8_t  bandwidth_low_pass_filter:2;
+    } bits;
+};
+
+union TReg_CTRL_REG_1
+{
+    enum DataRate {
+        DATA_RATE_800  = 0,
+        DATA_RATE_400  = 1,
+        DATA_RATE_200  = 2,
+        DATA_RATE_100  = 3,
+        DATA_RATE_50   = 4,
+        DATA_RATE_25   = 5,
+        DATA_RATE_12_5 = 6,
+        //DATA_RATE_12_5 = 7,
+    };
+
+    uint8_t data;
+    struct {
+        uint8_t  ready:1;
+        uint8_t  active:1;
+        uint8_t  data_rate:3;
+        uint8_t  self_test:1;
+        uint8_t  reset:1;
+        uint8_t  unused:1;
+    } bits;
+};
+
+union TReg_CTRL_REG_3
+{
+    uint8_t data;
+    struct {
+        uint8_t  full_scale_double:1;
+        uint8_t  unused:1;
+        uint8_t  extctrlen:1;
+        uint8_t  wraptoone:1;
+        uint8_t  unused_2:4;
+    } bits;
+};
+
+union TReg_D_STATUS
+{
+    uint8_t data;
+    struct {
+        uint8_t  x_data_ready:1;
+        uint8_t  y_data_ready:1;
+        uint8_t  z_data_ready:1;
+        uint8_t  zyx_data_ready:1;
+        uint8_t  x_overwrite:1;
+        uint8_t  y_overwrite:1;
+        uint8_t  z_overwrite:1;
+        uint8_t  zyx_overwrite:1;
+    } bits;
+};
+
+
+#pragma pack(pop)
+
+
+
+
+
+
+
 
 /*=========================================================================
 I2C ADDRESS/BITS AND SETTINGS
@@ -57,6 +115,9 @@ I2C ADDRESS/BITS AND SETTINGS
 #define GYRO_SENSITIVITY_2000DPS (0.0625F)    // ..
 /*=========================================================================*/
 
+#ifdef PLATFORM_ARDUINO
+#include "Arduino.h"
+#include <Wire.h>
 
 void A_FXAS21002C::write8(uint8_t reg, uint8_t value)
 {
@@ -75,6 +136,7 @@ uint8_t A_FXAS21002C::read8(uint8_t reg)
     Wire.requestFrom((uint8_t)FXAS21002C_ADDRESS, (uint8_t)1);
     return Wire.read();
 }
+#endif
 
 float  A_FXAS21002C::getSensitivity(const A_FXAS21002C::EGyroRange &range ) {
     switch(range)
@@ -91,30 +153,6 @@ float  A_FXAS21002C::getSensitivity(const A_FXAS21002C::EGyroRange &range ) {
     return GYRO_SENSITIVITY_2000DPS;
 }
 
-//inline uint8_t Adafruit_FXAS21002C::getFullScaleCode(const Adafruit_FXAS21002C::EGyroRange& rng )
-//{
-//    /*
-//    * 1:0 FullScale
-//    *     00  = 2000
-//    *     01  = 1000
-//    *     10  = 500
-//    *     11  = 250
-//    *
-//    * see https://cdn-learn.adafruit.com/assets/assets/000/040/671/original/FXAS21002.pdf?1491475056
-//    *  Selectable Full Scale Ranges
-//    */
-//    switch (rng) {
-//    case  GYRO_RANGE_250DPS:
-//        return 0x3;
-//    case GYRO_RANGE_500DPS:
-//        return 0x2;
-//    case GYRO_RANGE_1000DPS:
-//        return 0x1;
-//    case GYRO_RANGE_2000DPS:
-//        return 0x0;
-//    }
-//    return 0x0;
-//}
 
 uint16_t A_FXAS21002C::getRangeDegrees() {
     switch (m_range_code) {
@@ -134,7 +172,9 @@ uint16_t A_FXAS21002C::getRangeDegrees() {
 A_FXAS21002C::A_FXAS21002C()
 {
     m_raw_temperature = 0;
+    m_too_slow = 0;
 }
+
 
 
 bool A_FXAS21002C::begin(uint8_t rng)
@@ -150,54 +190,29 @@ bool A_FXAS21002C::begin(uint8_t rng)
     m_raw_data.y = 0;
     m_raw_data.z = 0;
 
-    /* Make sure we have the correct chip ID since this checks
-    for correct address and that the IC is properly connected */
     uint8_t id = read8(GYRO_REGISTER_WHO_AM_I);
     // Serial.print("WHO AM I? 0x"); Serial.println(id, HEX);
     if (id != FXAS21002C_ID)
         return false;
 
-    /* Set CTRL_REG1 (0x13)
-    ====================================================================
-    BIT  Symbol    Description                                   Default
-    ---  ------    --------------------------------------------- -------
-    6  RESET     Reset device on 1                                   0
-    5  ST        Self test enabled on 1                              0
-    4:2  DR        Output data rate                                  000
-              000 = 800 Hz
-              001 = 400 Hz
-              010 = 200 Hz
-              011 = 100 Hz
-              100 = 50 Hz
-              101 = 25 Hz
-              110 = 12.5 Hz
-              111 = 12.5 Hz
-    1  ACTIVE    Standby(0)/Active(1)                                0
-    0  READY     Standby(0)/Ready(1)                                 0
-    */
+    TReg_CTRL_REG_0 reg0;
+    TReg_CTRL_REG_1 reg1;
+    TReg_CTRL_REG_3 reg3;
+    reg0.data = reg1.data = reg3.data =  0;
+    write8(GYRO_REGISTER_CTRL_REG1, reg1.data);
+    reg1.bits.reset = 1;
+    write8(GYRO_REGISTER_CTRL_REG1, reg1.data);
+    reg0.bits.fullscale_range = m_range_code;
+    //reg0.bits.bandwidth
+    write8(GYRO_REGISTER_CTRL_REG0, reg0.data);
 
-    /* Reset then switch to active mode with 100Hz output */
-    write8(GYRO_REGISTER_CTRL_REG1, 0x00);
-    write8(GYRO_REGISTER_CTRL_REG1, (1<<6));
+    reg3.bits.full_scale_double = 0;
+    write8(GYRO_REGISTER_CTRL_REG3, reg3.data);
 
-
-    /* TODO control range scale by CTRL_REG0
-    * Warning there is double range!! at CTRL_REG3
-    * Set CTRL_REG3 (0x15)
-    * Bit  7 6     5    4 3         2        1 0
-    * * Read BW[1:0] SPIW SEL[1:0] HPF_EN FS[1:0]
-    *
-    * 1:0 FullScale
-    *     00  = 2000
-    *     01  = 1000
-    *     10  = 500
-    *     11  = 250
-    *
-    * see https://cdn-learn.adafruit.com/assets/assets/000/040/671/original/FXAS21002.pdf?1491475056
-    */
-    write8(GYRO_REGISTER_CTRL_REG0, m_range_code);// TODO try hi-pass filter
-
-    write8(GYRO_REGISTER_CTRL_REG1, 0x0E); // 000-011-1-0     = 100 hz - active -
+    reg1.bits.reset     = 0;
+    reg1.bits.data_rate = TReg_CTRL_REG_1::DATA_RATE_400;
+    reg1.bits.active    = 1;
+    write8(GYRO_REGISTER_CTRL_REG1, reg1.data);
 
     delay(100); // 60 ms + 1/ODR
     /* ------------------------------------------------------------------ */
@@ -205,9 +220,7 @@ bool A_FXAS21002C::begin(uint8_t rng)
     return true;
 }
 
-
-
-bool A_FXAS21002C::getGyro( TPoint3F& gyro, float& temp )
+bool A_FXAS21002C::getGyro( TPoint3F& gyro)
 {
     /* Read 7 bytes from the sensor */
     Wire.beginTransmission((uint8_t)FXAS21002C_ADDRESS);
@@ -215,7 +228,12 @@ bool A_FXAS21002C::getGyro( TPoint3F& gyro, float& temp )
     Wire.endTransmission();
     Wire.requestFrom((uint8_t)FXAS21002C_ADDRESS, (uint8_t)7);
 
-    /*uint8_t status =*/ Wire.read();
+    TReg_D_STATUS reg_status;
+    reg_status.data = Wire.read();
+    if(reg_status.bits.zyx_overwrite)
+        m_too_slow++;
+        //Serial.println("override");
+
     uint8_t xhi = Wire.read();
     uint8_t xlo = Wire.read();
     uint8_t yhi = Wire.read();
@@ -229,11 +247,13 @@ bool A_FXAS21002C::getGyro( TPoint3F& gyro, float& temp )
     gyro.z = (m_raw_data.z = (int16_t)((zhi << 8) | zlo));
     gyro *= getSensitivity(m_range_code) * SENSORS_DPS_TO_RADS;
 
-    //// temperature
+    return true;
+}
+
+void A_FXAS21002C::getTemp( float& temp )
+{
     m_raw_temperature = read8(GYRO_REGISTER_TEMP);
     temp = m_raw_temperature;
-
-    return true;
 }
 
 

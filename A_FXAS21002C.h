@@ -34,24 +34,21 @@ public:
         GYRO_RANGE_2000DPS = 0,
     };
 #define GYRO_RANGE_COUNT 4
-
-    struct TGyroRawData {
-        int16_t x;
-        int16_t y;
-        int16_t z;
-    };
 public:
     A_FXAS21002C();
 
+
     bool begin           ( uint8_t rng = GYRO_RANGE_250DPS );    
-    bool getGyro         ( TPoint3F& gyro, float& temp );
+    bool getGyro         ( TPoint3F& gyro);
+    void getTemp         ( float& temp );
 
     uint16_t        getRangeDegrees();
 
-    TGyroRawData    m_raw_data; /* Raw values from last sensor read */
-    int8_t          m_raw_temperature;
+    TPoint3<int16_t> m_raw_data; /* Raw values from last sensor read */
+    int8_t           m_raw_temperature;
 
 
+    uint8_t m_too_slow;
 protected:
     void        write8  ( uint8_t reg, uint8_t value );
     uint8_t     read8   ( uint8_t reg );

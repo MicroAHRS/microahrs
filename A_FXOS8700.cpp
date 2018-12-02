@@ -15,10 +15,14 @@
   BSD license, all text above must be included in any redistribution
  ****************************************************/
 
-#include "Arduino.h"
-#include <Wire.h>
+//#include "Arduino.h"
+
 //#include <limits.h>
 #include "A_FXOS8700.h"
+#include "config.h"
+
+#define FXOS8700_ADDRESS           (0x1F)     // 0011111
+#define FXOS8700_ID                (0xC7)     // 1100 0111
 
 #define ACCEL_MG_LSB_2G (0.000244F)
 #define ACCEL_MG_LSB_4G (0.000488F)
@@ -27,10 +31,13 @@
 
 #define SENSORS_GRAVITY_EARTH             (9.80665F)              /**< Earth's gravity in m/s^2 */
 #define SENSORS_GRAVITY_STANDARD          (SENSORS_GRAVITY_EARTH)
+
+// see https://www.nxp.com/docs/en/data-sheet/FXOS8700CQ.pdf
 /***************************************************************************
  PRIVATE FUNCTIONS
  ***************************************************************************/
-
+#ifdef PLATFORM_ARDUINO
+#include <Wire.h>
 void A_FXOS8700::write8(uint8_t reg, uint8_t value)
 {
     Wire.beginTransmission(FXOS8700_ADDRESS);
@@ -38,7 +45,6 @@ void A_FXOS8700::write8(uint8_t reg, uint8_t value)
     Wire.write((uint8_t)value);
     Wire.endTransmission();
 }
-
 uint8_t A_FXOS8700::read8(uint8_t reg)
 {  
     Wire.beginTransmission((uint8_t)FXOS8700_ADDRESS);
@@ -50,6 +56,41 @@ uint8_t A_FXOS8700::read8(uint8_t reg)
 
     return Wire.read();
 }
+#endif
+
+union FXOS8700Reg_CTRL_REG_1
+{
+    enum DataRateMono {
+        DATA_RATE_MONO_800  = 0,
+        DATA_RATE_MONO_400  = 1,
+        DATA_RATE_MONO_200  = 2,
+        DATA_RATE_MONO_100  = 3,
+        DATA_RATE_MONO_50   = 4,
+        DATA_RATE_MONO_12_5 = 5,
+        DATA_RATE_MONO_6_25 = 6,
+        DATA_RATE_MONO_1_5625 = 7,
+    };
+
+    enum DataRateHybrid {
+        DATA_RATE_HYBRID_400  = 0,
+        DATA_RATE_HYBRID_200  = 1,
+        DATA_RATE_HYBRID_100  = 2,
+        DATA_RATE_HYBRID_50  = 3,
+        DATA_RATE_HYBRID_25   = 4,
+        DATA_RATE_HYBRID_6_25 = 5,
+        DATA_RATE_HYBRID_3_125 = 6,
+        DATA_RATE_HYBRID_0_7813 = 7,
+    };
+
+    uint8_t data;
+    struct {
+        uint8_t  active:1;
+        uint8_t  f_read:1;
+        uint8_t  lnoise:1;
+        uint8_t  data_rate:3;
+        uint8_t  aslp_rate:3;
+    } bits;
+};
 
 A_FXOS8700::A_FXOS8700()
 {    
@@ -71,7 +112,7 @@ bool A_FXOS8700::begin(uint8_t rng)
      for correct address and that the IC is properly connected */
     uint8_t id = read8(FXOS8700_REGISTER_WHO_AM_I);
     if (id != FXOS8700_ID)
-    return false;
+        return false;
 
     /* Set to standby mode (required to make changes to this register) */
     write8(FXOS8700_REGISTER_CTRL_REG1, 0);
@@ -82,7 +123,15 @@ bool A_FXOS8700::begin(uint8_t rng)
     /* High resolution */
     write8(FXOS8700_REGISTER_CTRL_REG2, 0x02);
     /* Active, Normal Mode, Low Noise, 100Hz in Hybrid Mode */
-    write8(FXOS8700_REGISTER_CTRL_REG1, 0x15);
+
+    FXOS8700Reg_CTRL_REG_1 reg1;
+    reg1.data = 0;
+    reg1.bits.active = 1;
+    reg1.bits.lnoise = 1;
+    //no fast read
+    reg1.bits.data_rate = FXOS8700Reg_CTRL_REG_1::DATA_RATE_HYBRID_25;
+
+    write8(FXOS8700_REGISTER_CTRL_REG1, 0x15); // 00010101
 
     /* Configure the magnetometer */
     /* Hybrid Mode, Over Sampling Rate = 16 */

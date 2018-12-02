@@ -31,7 +31,7 @@
 #define MAGNITUDE_VECTOR TPoint3F(1,0,0)
 
 #define GYRO_COPNESATION_MIN_TIME  2
-#define GYRO_COPNESATION_MAX_TIME  300
+#define GYRO_COPNESATION_MAX_TIME  120
 //============================================================================================
 // Functions
 
@@ -275,12 +275,26 @@ void TAHRSMadgwick::updateGyroAverage(TPoint3F& gyro, float dt)
 void TAHRSMadgwick::update(TPoint3F gyro, TPoint3F acc, TPoint3F mag, float dt)
 {    
     updateGyroAverage(gyro, dt);
-    TQuaternionF q_dot(0,0,0,0);
+    TQuaternionF q_dot;
     q_dot -= correctiveStepAccel(acc, dt);
     q_dot -= correctiveStepMag(mag, dt);
     q_dot += orientationChangeFromGyro(m_q, gyro);    
     changeOrientation(q_dot * dt);       
 }
+
+void TAHRSMadgwick::updateGyro(TPoint3F gyro, float dt) {
+    updateGyroAverage(gyro, dt);
+    TQuaternionF q_dot = orientationChangeFromGyro(m_q, gyro);
+    changeOrientation(q_dot * dt);
+}
+
+void TAHRSMadgwick::updateAccMag(TPoint3F acc, TPoint3F mag, float dt) {
+    TQuaternionF q_dot;
+    q_dot -= correctiveStepAccel(acc, dt);
+    q_dot -= correctiveStepMag(mag, dt);
+    changeOrientation(q_dot * dt);
+}
+
 
 inline void TAHRSMadgwick::changeOrientation(const TQuaternionF& delta)
 {

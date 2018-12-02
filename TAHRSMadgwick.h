@@ -43,9 +43,12 @@ public:
 public:
     TAHRSMadgwick();
 
+    void resetGyroErrorSwitchTime() {m_gyro_err_switch_time = TPoint3F();}
     void setZetaMaxAngle(float value);
     void setGyroMeas(float error, float drift, float error_mag);
     void update(TPoint3F gyro, TPoint3F acc, TPoint3F mag, float dt);
+    void updateGyro(TPoint3F gyro, float dt);
+    void updateAccMag(TPoint3F acc, TPoint3F mag, float dt);
 
     inline TPoint3F getAngles() const { return m_q.getAngles();}
     inline void setGyroError(const TPoint3F& vec) { m_gyro_error = vec;}
