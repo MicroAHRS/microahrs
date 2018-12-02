@@ -481,7 +481,7 @@ void TApplication::onCommandBoostFilter() {
     TPoint3F gyr;
     int samples_count = 10;
     for(int i=0;i<samples_count;i++) {
-        updateDevices(0.01);
+        updateDevices(1);
         acc += getAcc();
         mag += getMagn();
         gyr += getGyro();

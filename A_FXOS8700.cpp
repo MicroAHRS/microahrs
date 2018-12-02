@@ -92,6 +92,18 @@ union FXOS8700Reg_CTRL_REG_1
     } bits;
 };
 
+union FXOS8700Reg_MCTRL_REG_1
+{
+    uint8_t data;
+    struct {
+        uint8_t  hybrid_mode_select:2;
+        uint8_t  oversample_ratio:3;
+        uint8_t  one_shoot_triger:1;
+        uint8_t  one_shoot_reset:1;
+        uint8_t  mag_auto_calibration:1;
+    } bits;
+};
+
 A_FXOS8700::A_FXOS8700()
 {    
 }
@@ -114,28 +126,38 @@ bool A_FXOS8700::begin(uint8_t rng)
     if (id != FXOS8700_ID)
         return false;
 
+    FXOS8700Reg_CTRL_REG_1 reg1;
+    reg1.data = 0;
+    reg1.bits.active = 0;
+
     /* Set to standby mode (required to make changes to this register) */
-    write8(FXOS8700_REGISTER_CTRL_REG1, 0);
+    write8(FXOS8700_REGISTER_CTRL_REG1, reg1.data);
 
     write8(FXOS8700_REGISTER_XYZ_DATA_CFG, (uint8_t)m_range);
     /* Configure the accelerometer */
 
     /* High resolution */
-    write8(FXOS8700_REGISTER_CTRL_REG2, 0x02);
-    /* Active, Normal Mode, Low Noise, 100Hz in Hybrid Mode */
+    //write8(FXOS8700_REGISTER_CTRL_REG2, 0x02);
+    write8(FXOS8700_REGISTER_CTRL_REG2, 0x00); // ProninE we need avarage
 
-    FXOS8700Reg_CTRL_REG_1 reg1;
+    /* Active, Normal Mode, Low Noise, 50Hz in Hybrid Mode */
+
     reg1.data = 0;
     reg1.bits.active = 1;
     reg1.bits.lnoise = 1;
     //no fast read
     reg1.bits.data_rate = FXOS8700Reg_CTRL_REG_1::DATA_RATE_HYBRID_25;
 
-    write8(FXOS8700_REGISTER_CTRL_REG1, 0x15); // 00010101
+    //write8(FXOS8700_REGISTER_CTRL_REG1, 0x15); // 00010101
+    write8(FXOS8700_REGISTER_CTRL_REG1, reg1.data); // 00010101
 
     /* Configure the magnetometer */
     /* Hybrid Mode, Over Sampling Rate = 16 */
-    write8(FXOS8700_REGISTER_MCTRL_REG1, 0x1F);
+    FXOS8700Reg_MCTRL_REG_1 mreg1;
+    mreg1.data = 0;
+    mreg1.bits.oversample_ratio = 0x6;
+    mreg1.bits.hybrid_mode_select = 0x3;
+    write8(FXOS8700_REGISTER_MCTRL_REG1, mreg1.data); // was 0x1F
     /* Jump to reg 0x33 after reading 0x06 */
     write8(FXOS8700_REGISTER_MCTRL_REG2, 0x20);
     return true;

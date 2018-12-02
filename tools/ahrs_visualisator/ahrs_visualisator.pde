@@ -1,4 +1,4 @@
-    
+            
 import java.util.Date;
 import java.text.*;
 import processing.serial.*;
@@ -326,7 +326,12 @@ void drawCursor(float x, float y, float angle, PImage img, boolean flip, float a
     pushMatrix(); // begin object
     translate(x, y);
     rotate(radians(angle));  
-    fill(200,200,200,128);
+    if(anlge_aim - angle > 1)
+        fill(0,150,255,200);
+    else if(anlge_aim - angle < -1)
+        fill(200,200,50,200);
+    else    
+        fill(200,200,200,128);
     float w2 = img.width / 2;
     float h2 = img.height / 2;
     float d = 260;
