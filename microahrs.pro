@@ -28,7 +28,8 @@ HEADERS += \
     shared/Function/TFunctionLimitedAverageF.h \
     config.h \
     TStorage.h \
-    shared/LittleBigEndian.h
+    shared/LittleBigEndian.h \
+    shared/cosinusize.hpp
 
 
 SOURCES += \        

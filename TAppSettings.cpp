@@ -1,6 +1,6 @@
 #include "TAppSettings.h"
-//#define DEVICE_SET_1
-#define DEVICE_SET_2
+#define DEVICE_SET_1
+//#define DEVICE_SET_2
 
 #include "TStorage.h"
 

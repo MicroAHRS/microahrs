@@ -19,8 +19,9 @@
 
 // 1.10 смена частоты опроса - гироскоп 400 герц, акселерометр и магнитометр 25 герц.
 //      ускорение частоты цикла с 140 до 380
+// 1.11 настроил способы отключения компенсации нуля гироскопа  200 герц частота гирика
 
-#define AHRS_VERSION "1.10"
+#define AHRS_VERSION "1.11"
 
 class TAppSettings;
 class A_FXAS21002C_termo;
@@ -57,7 +58,7 @@ protected:
     inline void onCommandResetPitchRoll();
     inline void onCommandSetYawByMag();
     inline void onCommandSetPitchRollByAcc();
-    void        onCommandBoostFilter();
+    void        onCommandBoostFilter(bool boost_mag);
     inline void onCommandCalibrateGyro();
     inline void onCommandSetGravityVector();
     inline void onCommandSetMagnitudeVector();
@@ -89,7 +90,10 @@ private:
     TPoint3F        m_gyro_value;
     TPoint3F        m_acc_value;
     TPoint3F        m_mag_value;
+    float           m_gyro_dt;
+    float           m_gyro_dt_filter;
     float           m_acc_dt;
+    float           m_acc_dt_filter;
 
     float           m_calib_mode_time_cur; // if > 0 we in caliblrate mode
 

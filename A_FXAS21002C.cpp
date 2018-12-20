@@ -210,7 +210,7 @@ bool A_FXAS21002C::begin(uint8_t rng)
     write8(GYRO_REGISTER_CTRL_REG3, reg3.data);
 
     reg1.bits.reset     = 0;
-    reg1.bits.data_rate = TReg_CTRL_REG_1::DATA_RATE_400;
+    reg1.bits.data_rate = TReg_CTRL_REG_1::DATA_RATE_200;
     reg1.bits.active    = 1;
     write8(GYRO_REGISTER_CTRL_REG1, reg1.data);
 
@@ -232,6 +232,9 @@ bool A_FXAS21002C::getGyro( TPoint3F& gyro)
     reg_status.data = Wire.read();
     if(reg_status.bits.zyx_overwrite)
         m_too_slow++;
+
+    if(!reg_status.bits.zyx_data_ready)
+        return false; // data is not ready
         //Serial.println("override");
 
     uint8_t xhi = Wire.read();

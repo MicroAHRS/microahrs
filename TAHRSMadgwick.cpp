@@ -30,8 +30,9 @@
 #define GRAVITY_VECTOR TPoint3F(0,0,1)
 #define MAGNITUDE_VECTOR TPoint3F(1,0,0)
 
-#define GYRO_COPNESATION_MIN_TIME  2
-#define GYRO_COPNESATION_MAX_TIME  120
+#define CORRECTION_MAX_TIME_STABLE  0.5
+#define GYRO_COPNESATION_MIN_TIME   2
+#define GYRO_COPNESATION_MAX_TIME   30
 //============================================================================================
 // Functions
 
@@ -45,7 +46,9 @@ TAHRSMadgwick::TAHRSMadgwick()
 #endif
 {
     setGyroMeas(gyroMeasError, gyroMeasDrift, gyroMeasErrorMag);
-    setOrientation(TQuaternionF( 1.0f, 0, 0, 0));    
+    setOrientation(TQuaternionF( 1.0f, 0, 0, 0));
+    m_accel_correction_size = 1;
+    m_calibration_mode = false;
 //    m_gravity = TPoint3F(0,0,1);
 //    m_magnitude = TPoint3F(1,0,0);
 //    setZetaMaxAngle(90);
@@ -133,25 +136,30 @@ static inline bool SameSign(const float& x, const float& y) {
     return (x >= 0) ^ (y < 0);
 }
 
-static float CompensateGyroChannel(const float& gyro, const float& err_delta, float& err_delta_first, float& err_time  , const float& dt)
+static float CompensateGyroChannel(const float& gyro, const float& err_delta, float& err_delta_first, float& err_time  , float & unstable_time, const float& dt)
 {
     if(gyro == 0)
         return 0;
 
-#ifdef GYRO_COPNESATION_TIME
+
+    err_time += dt;
+    unstable_time += dt;
+
     // time of swicth sign
     if(!SameSign(err_delta, err_delta_first)) {
+        if(err_time < CORRECTION_MAX_TIME_STABLE)
+            unstable_time = 0;
         err_time = 0;
         err_delta_first = err_delta;
     }
-    err_time += dt;
 
-    if(InRange(err_time, GYRO_COPNESATION_MIN_TIME, GYRO_COPNESATION_MAX_TIME))
+#ifdef GYRO_COPNESATION_TIME
+    if(InRange(unstable_time, GYRO_COPNESATION_MIN_TIME, GYRO_COPNESATION_MAX_TIME))
         return 0;
 #endif
 
 #ifdef GYRO_COPNESATION_SLOWDOWN
-    if(!SameSign(err_delta, gyro))
+    if(!SameSign(err_delta, gyro) && unstable_time > 1.0f)
         return 0;
 #endif
 
@@ -176,9 +184,26 @@ void TAHRSMadgwick::compensateGyroDrift(
     err.y = q.w * s.y + q.x * s.z -  q.y * s.w - q.z * s.x;
     err.z = q.w * s.z - q.x * s.y +  q.y * s.x - q.z * s.w;
     err *= 2.0f * dt * zeta;
-    m_gyro_error.x += CompensateGyroChannel(gyro.x , err.x , m_gyro_err_direction.x , m_gyro_err_switch_time.x , dt);
-    m_gyro_error.y += CompensateGyroChannel(gyro.y , err.y , m_gyro_err_direction.y , m_gyro_err_switch_time.y , dt);
-    m_gyro_error.z += CompensateGyroChannel(gyro.z , err.z , m_gyro_err_direction.z , m_gyro_err_switch_time.z , dt);
+    m_gyro_error.x += CompensateGyroChannel(gyro.x , err.x , m_correction_direction.x , m_correction_switch_time.x , m_unstable_time.x, dt);
+    m_gyro_error.y += CompensateGyroChannel(gyro.y , err.y , m_correction_direction.y , m_correction_switch_time.y , m_unstable_time.y, dt);
+    m_gyro_error.z += CompensateGyroChannel(gyro.z , err.z , m_correction_direction.z , m_correction_switch_time.z , m_unstable_time.z, dt);
+
+
+    if(gyro.x != 0 && gyro.y != 0 ) {
+        float max_time = Max(m_correction_switch_time.x, m_correction_switch_time.y);
+        if(max_time <= dt * 2.5)
+            m_accel_correction_size = Max(0.01f , m_accel_correction_size*0.9f);
+        else if(max_time >= dt * 4)
+            m_accel_correction_size = Min(1.0f , m_accel_correction_size*1.5f);
+    }
+
+    if(gyro.z != 0 ) {
+        if(m_correction_switch_time.z <= dt * 2.5)
+            m_mag_correction_size = Max(0.01f , m_mag_correction_size*0.9f);
+        else if(m_correction_switch_time.z >= dt * 4)
+            m_mag_correction_size = Min(1.0f , m_mag_correction_size*1.5f);
+    }
+
 }
 
 //#define AXIS_X 0
@@ -206,7 +231,7 @@ void TAHRSMadgwick::compensateGyroDrift(
 TQuaternionF TAHRSMadgwick::correctiveStepAccel(TPoint3F& acc, const float& dt)
 {
     TQuaternionF result;
-    if(acc.isZero())
+    if(acc.isZero() || beta == 0.0f)
         return result;
 
     acc.normalize();
@@ -215,6 +240,10 @@ TQuaternionF TAHRSMadgwick::correctiveStepAccel(TPoint3F& acc, const float& dt)
 
     if(!result.isZero())  {
         result.normalize();
+
+        if(m_accel_correction_size < 1.0f)
+            result *= m_accel_correction_size;
+
         compensateGyroDrift(result, TPoint3F(m_gyro_avg.x, m_gyro_avg.y, 0), dt);
         result *= beta;
     }
@@ -235,9 +264,9 @@ inline TPoint3F TAHRSMadgwick::removeMagneticVertical(const TPoint3F& mag)
 }
 
 TQuaternionF TAHRSMadgwick::correctiveStepMag(TPoint3F& mag, const float &dt)
-{
+{            
     TQuaternionF result;
-    if(mag.isZero())
+    if(mag.isZero() || neta == 0.0f)
         return result;
     mag.normalize();
 
@@ -252,6 +281,8 @@ TQuaternionF TAHRSMadgwick::correctiveStepMag(TPoint3F& mag, const float &dt)
     result = addGradientDescentStep(m_q, MAGNITUDE_VECTOR, mag, dest_local);
     if(!result.isZero())  {
         result.normalize();
+        if(m_mag_correction_size < 1.0f)
+            result *= m_mag_correction_size;
         compensateGyroDrift(result, TPoint3F(0, 0, m_gyro_avg.z), dt);
         result *= neta;
     }
@@ -268,6 +299,9 @@ void TAHRSMadgwick::updateGyroAverage(TPoint3F& gyro, float dt)
 
 #ifndef GYRO_COPNESATION_AVARAGE
     m_gyro_avg = gyro;
+#else
+    if(m_calibration_mode)
+        m_gyro_avg = gyro;
 #endif
 }
 //////////////////////////////////////////////////////////////////

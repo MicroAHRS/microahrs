@@ -26,7 +26,7 @@ const float FLAOT_FACKTOR_READ = 1000000.f;
 
 const float CALIBRATION_TIME_MAX = 30.f;
 const float CALIBRATION_TIME_ACC_DISPERSION = 20.f;
-const float CALIBRATION_ACC_DIFF_PERCENTS = 5 / 100.f;
+const float CALIBRATION_ACC_DIFF_PERCENTS = 20.0 / 100.f;
 
 
 const float ACCEL_UPDATE_TIME = 0.04f; // 25 hz update accel
@@ -43,14 +43,18 @@ TApplication::TApplication()
     m_fps = 0;
     m_calib_mode_time_cur = 0;
     m_acc_dt = 0;
+    m_acc_dt_filter = 0;
+
+    m_gyro_dt = 0;
+    m_gyro_dt_filter = 0;
 }
 
-void PrintVector(const TPoint3F& vec) {
-    Serial.print(vec.x);
+void PrintVector(const TPoint3F& vec, float factor = 1000) {
+    Serial.print(vec.x * factor);
     Serial.print(MSG_SPACE);
-    Serial.print(vec.y);
+    Serial.print(vec.y * factor);
     Serial.print(MSG_SPACE);
-    Serial.print(vec.z);
+    Serial.print(vec.z * factor);
     Serial.print(MSG_SPACE);
 }
 
@@ -102,24 +106,37 @@ bool TApplication::init()
     Serial.print("AHRS Ver ");
     Serial.println(AHRS_VERSION);
     delay(100);
+
+    for(int i=0;i<10;i++)
+        updateDevices(0.1);
     //m_ahrs->setOrientation(TQuaternionF::Identity());
     //CalibrateGyroCycle(0.1, 0, 2, false);
-    onCommandBoostFilter();            
-
+    onCommandBoostFilter(true);
+    //onCommandCalibrateGyro();
     return true;
 }
 
 
 
 TPoint3F TApplication::getMagn() const {
-    if(m_settings->disable_mag )
-        return TPoint3F();
+    if(m_settings->disable_mag ) {
+        if(isCalibrationMode())
+            return TPoint3F(1.001,0.000001,0.00001);
+        else
+            return TPoint3F();
+    }
     TPoint3F mag_vec = m_mag_value - m_settings->mag_offset;
     return m_settings->mag_matrix * mag_vec;
 }
 
 
 TPoint3F TApplication::getAcc() const {
+    if(m_settings->disable_acc ) {
+        if(isCalibrationMode())
+            return TPoint3F(0.000001,0.000001,9.801);
+        else
+            return TPoint3F();
+    }
     //return (VectorFromEvent(accel_event.acceleration) - m_settings->acc_zero_offset).scale(m_settings->acc_scale);
     return (m_acc_value - m_settings->acc_zero_offset).scale(m_settings->acc_scale);
 }
@@ -140,17 +157,26 @@ void TApplication::update(float dt)
 }
 
 void TApplication::updateDevices(float dt) {
-    m_device_gyro->getGyro(m_gyro_value);
-
+    m_gyro_dt += dt;
     m_acc_dt += dt;
+
+    if(m_device_gyro->getGyro(m_gyro_value)) {
+        m_gyro_dt_filter = m_gyro_dt;
+        m_gyro_dt = 0;
+    }
+
     if(m_acc_dt >= ACCEL_UPDATE_TIME) {
         m_device_gyro->getTemp(m_temperature);
         m_device_accelmag->getAccMag(m_acc_value, m_mag_value);
         m_avg_acc.put(m_acc_value, m_acc_dt);
         m_acc_value = m_avg_acc.getAvarage();
+        m_acc_dt_filter = m_acc_dt;
+        m_acc_dt = 0;
     }
 
 }
+
+#include "shared/cosinusize.hpp"
 
 #define CALIBRATE_BETA_START 2.f
 #define CALIBRATE_BETA_END   0.f
@@ -161,6 +187,8 @@ void TApplication::updateCalibration(float dt)
     int prev_time = m_calib_mode_time_cur;
     m_calib_mode_time_cur -= dt;
 
+    m_ahrs->m_calibration_mode = true;
+
     if((int)m_calib_mode_time_cur < prev_time) {
         Serial.print("...");
         Serial.println(prev_time);
@@ -170,6 +198,7 @@ void TApplication::updateCalibration(float dt)
     updateCalibrationAcc(dt);
 
     float progress = GetProgressSection(m_calib_mode_time_cur, 0, CALIBRATION_TIME_MAX);
+    progress = cosinusize(progress * 0.5) * 2;
     float beta = Lerp(progress, CALIBRATE_BETA_END ,CALIBRATE_BETA_START);
     float zeta = beta * 0.1f;
     float neta = beta;
@@ -205,6 +234,7 @@ void TApplication::onCalibrationFinished() {
     //avg_dif *= CALIBRATION_ACC_AVARAGE_DIFF_COEF;
     m_settings->acc_min_length_sq = Power2(avg_len - avg_dif);
     m_settings->acc_max_length_sq = Power2(avg_len + avg_dif);
+    m_ahrs->m_calibration_mode = false;
 
     m_settings->gyro_zero_offset = m_ahrs->m_gyro_error;
     onSettingsChanged();
@@ -213,22 +243,26 @@ void TApplication::onCalibrationFinished() {
 
 void TApplication::updateAHRS(float dt) {
     TPoint3F mag = getMagn();
-    TPoint3F acc = getAcc();    
+    TPoint3F acc = getAcc();            
 
-    if(m_acc_dt >= ACCEL_UPDATE_TIME) {
-        if(m_settings->disable_acc)
-            acc = TPoint3F(0,0,0);
-        m_ahrs->updateAccMag(acc,mag,m_acc_dt);
-        m_acc_dt = 0;
+    if(m_gyro_dt_filter > 0 && !m_settings->disable_gyro) {
+        //m_gyro_dt_filter = 0.005f;
+        m_ahrs->updateGyro(getGyro(),m_gyro_dt_filter);
+        m_gyro_dt_filter = 0;
     }
 
-    if(!m_settings->disable_gyro)
-        m_ahrs->updateGyro(getGyro(),dt);
+    if(m_acc_dt_filter > 0) {        
+        m_ahrs->updateAccMag(acc,mag,m_acc_dt_filter);
+        m_acc_dt_filter = 0;
+    }
 }
 
 void TApplication::updateDriftCoefByAngles()
 {
     if(isCalibrationMode())
+        return;
+
+    if(m_settings->disable_acc)
         return;
 
     float acc_len_square = getAcc().lengthSq();
@@ -269,8 +303,8 @@ void TApplication::setup()
 
 void TApplication::loop()
 {
-    unsigned long ts = millis();
-    float dt = ((ts - m_last_update_time) / 1000.0);
+    unsigned long ts = micros();   // do not use milis see https://youtu.be/m3ViTkyPUKo?t=1035
+    float dt = ((ts - m_last_update_time) / 1000000.0);
 //    if(dt < 0.01) {
 ////      delay(1);
 //      return;
@@ -278,10 +312,10 @@ void TApplication::loop()
 
     m_last_update_time = ts;
 
-    if(dt > 1)
+    if(dt > 1 || dt < 0)
        return;
 
-    unsigned long seconds_count = int(ts / 1000);
+    unsigned long seconds_count = ts / 1000000;
     if(m_seconds_count != seconds_count) {
         m_fps = m_tick_count;
         m_tick_count = 0;
@@ -301,37 +335,40 @@ void TApplication::printOut() {
     Serial.print("Orient: ");
     PrintVector(angles * CONVERT_RAD_TO_DPS);
 
-    Serial.print("acc: ");
+    //Serial.print("acc: ");
     TPoint3F acc = getAcc();
     PrintVector(acc);
 
-    Serial.print("t: ");
+    //Serial.print("t: ");
     Serial.print(int(getTemperature()));
+    Serial.print(" ");
 
     if(m_settings->print_mag) {        
-        Serial.print(" gerr: ");
-        PrintVector(m_ahrs->m_gyro_error * CONVERT_RAD_TO_DPS * FLOAT_FACKTOR);
+       // Serial.print(" gerr: ");
+        PrintVector(m_ahrs->m_gyro_error * CONVERT_RAD_TO_DPS);
+        //PrintVector(m_ahrs->m_unstable_time * FLOAT_FACKTOR);
 
         TPoint3F coefs(m_ahrs->beta, m_ahrs->zeta, m_ahrs->neta);
-        PrintVector(coefs / BETTA_COEF * FLOAT_FACKTOR);
+        PrintVector(coefs / BETTA_COEF);
 
-        Serial.print("mag: ");
+        //Serial.print("mag: ");
         TPoint3F mag = getMagn();
         PrintVector(mag);
-        Serial.print("fps: ");
-        Serial.print(m_fps);
+        //Serial.print("fps: ");
+        Serial.print(int(m_fps));
+        Serial.print(" ");
 
-        Serial.print(" mag_raw: ");
-        PrintVector(m_mag_value * FLOAT_FACKTOR );
-        Serial.print("north: ");
-        PrintVector(m_ahrs->m_mag_horisontal * FLOAT_FACKTOR );
+        //Serial.print(" mag_raw: ");
+        PrintVector(m_mag_value);
+        //Serial.print("north: ");
+        PrintVector(m_ahrs->m_mag_horisontal);
     }
     Serial.println();
 
-    if(m_device_gyro->m_too_slow) {
-        //Serial.println(m_device_gyro->m_too_slow);
-        m_device_gyro->m_too_slow = 0;
-    }
+//    if(m_device_gyro->m_too_slow) {
+//        Serial.println(m_device_gyro->m_too_slow);
+//        m_device_gyro->m_too_slow = 0;
+//    }
 
 
     //Serial.print("q_dor: ");
@@ -391,9 +428,9 @@ void TApplication::onCommandSetMagnitudeVector() {
 void TApplication::onCommandCalibrateGyro()
 {
     m_settings->disable_gyro = false;
-    m_settings->disable_acc = false;
-    m_settings->disable_mag = false;
-    onCommandBoostFilter();
+    //m_settings->disable_acc = false;
+    //m_settings->disable_mag = false;
+    onCommandBoostFilter(true);
     m_calib_mode_time_cur = CALIBRATION_TIME_MAX;
 //    TQuaternionF q = m_ahrs->m_q;
 //    CalibrateGyroStep1(30);
@@ -464,6 +501,8 @@ void TApplication::onCommandSetMagnitudeMatrix() {
     for(int i=0;i<9 ; i++)
         mtx[i] = Serial.parseInt() / FLAOT_FACKTOR_READ;
 
+    //Serial.parseInt(); // end
+
     Serial.print("Matrix ");
     for(int i=0;i<9 ; i++) {
         if(i%3 == 0)
@@ -474,26 +513,24 @@ void TApplication::onCommandSetMagnitudeMatrix() {
     Serial.println();
 }
 
-void TApplication::onCommandBoostFilter() {    
+void TApplication::onCommandBoostFilter(bool boost_mag) {
     //ускорить фильтр - чтобы выровнить ориентацию    
-    TPoint3F acc;
-    TPoint3F mag;
-    TPoint3F gyr;
-    int samples_count = 10;
-    for(int i=0;i<samples_count;i++) {
-        updateDevices(1);
-        acc += getAcc();
-        mag += getMagn();
-        gyr += getGyro();
-    }
-    acc /= samples_count;
-    mag /= samples_count;
-    gyr /= samples_count;
+    TFunctionAverage<TPoint3F, float> avg_mag;
+    TFunctionAverage<TPoint3F, float> avg_acc;
 
+    for(int i=0;i<50;i++) {
+        float dt = 0.1;
+        updateDevices(dt);
+        //avg_acc.put(getAcc(),dt);
+        avg_mag.put(getMagn(),dt);
+    }
+
+    TPoint3F mag = avg_mag.getAvarage();
+    TPoint3F acc = getAcc();
     TPoint3F angles = m_ahrs->getAngles();
     angles.x  = atan2( acc.y, acc.z) ;
     angles.y  = (acc.z < 0?1:-1) * atan2( acc.x, acc.z) + (acc.z < 0? M_PI: 0);
-    if(!m_settings->disable_mag) {
+    if(!m_settings->disable_mag || boost_mag) {
         TQuaternionF q = TQuaternionF::CreateFormAngles(angles.x, angles.y, 0);
         mag = q.getConjugate().rotateVector(mag);
         angles.z  = -atan2( mag.y, mag.x);
@@ -658,7 +695,7 @@ void TApplication::receiveCmd() {
         return onCommandSetPitchRollByAcc();
 
     case E_CMD_CODE_BOOST_FILTER:
-        onCommandBoostFilter();
+        onCommandBoostFilter(false);
         Serial.println("Boost done");
         return;
 

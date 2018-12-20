@@ -12,9 +12,9 @@
 
 // Some GYRO COMPESATION TECHNICES
 
-//#define GYRO_COPNESATION_AVARAGE
-#define GYRO_COPNESATION_TIME
-//#define GYRO_COPNESATION_SLOWDOWN
+#define GYRO_COPNESATION_AVARAGE
+//#define GYRO_COPNESATION_TIME
+#define GYRO_COPNESATION_SLOWDOWN
 
 #define BETTA_COEF  0.0058134597      // sqrt(3/4) / 2.6 * CONVERT_DPS_TO_RAD , where 2.6 experimental coef
 
@@ -36,14 +36,22 @@ public:
     TFunctionLimitedAverage<TPoint3F, float , 4>  m_gyro_avg_f;
 #endif
 
+    TPoint3F    m_unstable_time;
+    TPoint3F    m_correction_switch_time;
+    TPoint3F    m_correction_direction;
 
-    TPoint3F    m_gyro_err_switch_time;
-    TPoint3F    m_gyro_err_direction;
+    float       m_mag_correction_size;
+    float       m_accel_correction_size;
+    bool        m_calibration_mode;
 
 public:
     TAHRSMadgwick();
 
-    void resetGyroErrorSwitchTime() {m_gyro_err_switch_time = TPoint3F();}
+    void resetGyroErrorSwitchTime() {
+        m_correction_switch_time = TPoint3F();
+        m_accel_correction_size = 1.0f;
+        m_mag_correction_size = 1.0f;
+    }
     void setZetaMaxAngle(float value);
     void setGyroMeas(float error, float drift, float error_mag);
     void update(TPoint3F gyro, TPoint3F acc, TPoint3F mag, float dt);
