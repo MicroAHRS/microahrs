@@ -77,7 +77,7 @@ void drawTextCommand() {
     text("m - TOGGLE_MAG ", x, y+=h );    
     text("a - TOGGLE_ACC ", x, y+=h );
     text("w - DEBUG_ACTION ", x, y+=h );
-    //text("v - VERBOSE OUTPUT ", x, y+=h );
+    text("v - VERBOSE OUTPUT ", x, y+=h );
     y+=h/2;
 
     x = width/2 + 50;

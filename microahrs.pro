@@ -29,7 +29,17 @@ HEADERS += \
     config.h \
     TStorage.h \
     shared/LittleBigEndian.h \
-    shared/cosinusize.hpp
+    shared/cosinusize.hpp \
+    shared/CanMessage/TCanMessageHeaderV1.h \
+    shared/CanMessage/TCanMessageBase.h \
+    shared/CanMessage/TCanMessageEMSFuel.h \
+    shared/CanMessage/TCanMessageEFISOrientation.h \
+    shared/CanMessage/TCanMessageEFIS.h \
+    shared/CanMessage/TCanMessageEMS.h \
+    TAirCan.h \
+    mcp_can_dfs.h \
+    TMCPCan.h \
+    shared/CanMessage/TCanMessageEFISBaroRaw.h
 
 
 SOURCES += \        
@@ -40,11 +50,15 @@ SOURCES += \
     A_FXAS21002C.cpp \
     A_FXAS21002C_termo.cpp \
     TAppSettings.cpp \
-    TStorage.cpp
+    TStorage.cpp \    
+    TAirCan.cpp \
+    TMCPCan.cpp
 
 OTHER_FILES += \
     microahrs.ino
 
 
 INCLUDEPATH += sensor
+
+INCLUDEPATH += ../libraries/CAN_BUS_Shield
 DEFINES *= ARDUINO=200

@@ -6,6 +6,7 @@
 #include "shared/Geometry/TPoint3F.h"
 #include "shared/Function/TFunctionAverageF.h"
 #include "shared/Function/TFunctionLimitedAverage.h"
+
 // 1.01
 // 1.02 поменялись коды комманды
 // 1.03 Reset Pitch Roll с учетом ориентации сенсора
@@ -20,15 +21,17 @@
 // 1.10 смена частоты опроса - гироскоп 400 герц, акселерометр и магнитометр 25 герц.
 //      ускорение частоты цикла с 140 до 380
 // 1.11 настроил способы отключения компенсации нуля гироскопа  200 герц частота гирика
+// 1.12 включил компенсацию по времени
+// 1.13 добавленн вывод в через CAN
 
-#define AHRS_VERSION "1.11"
+#define AHRS_VERSION "1.13"
 
 class TAppSettings;
 class A_FXAS21002C_termo;
 class A_FXAS21002C;
 class A_FXOS8700;
 class TAHRSMadgwick;
-
+class TAirCan;
 
 class TApplication
 {
@@ -49,6 +52,7 @@ protected:
     void onCalibrationFinished();
     //void turnLight(bool enabled);
     void printOut();
+    void sendCan(const TPoint3F &angles, float g, float g_angle);
 
     TPoint3F getAcc() const;
     TPoint3F getMagn() const;
@@ -101,6 +105,7 @@ private:
     A_FXAS21002C_termo*  m_device_gyro;
     A_FXOS8700*          m_device_accelmag;
     TAppSettings*        m_settings;
+    TAirCan*             m_air_can;
 
     TFunctionLimitedAverage<TPoint3F, float, 4> m_avg_acc;
     TFunctionAverageF    m_avg_acc_length;

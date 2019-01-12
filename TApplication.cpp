@@ -12,7 +12,14 @@
 
 #include "shared/in_range.hpp"
 
+#include "TAirCan.h"
+
 #include "Arduino.h"
+
+#define SERIAL_PRINT    1
+#define CAN_PRINT       1
+#define COMMANS_ENABLE  1
+#define DEFAULT_ORIENTATION_ENABLE 0
 
 const char* MSG_SPACE = " ";
 const char* MSG_MAGNIT = "Mag";
@@ -30,6 +37,7 @@ const float CALIBRATION_ACC_DIFF_PERCENTS = 20.0 / 100.f;
 
 
 const float ACCEL_UPDATE_TIME = 0.04f; // 25 hz update accel
+const int SPI_CS_PIN = 10;
 
 TApplication::TApplication()
     : m_avg_acc(0.5, 0 )
@@ -47,6 +55,7 @@ TApplication::TApplication()
 
     m_gyro_dt = 0;
     m_gyro_dt_filter = 0;
+    m_air_can = 0;
 }
 
 void PrintVector(const TPoint3F& vec, float factor = 1000) {
@@ -83,6 +92,7 @@ bool TApplication::init()
     m_settings = new TAppSettings();
     m_device_gyro = new A_FXAS21002C_termo(/*0x0021002C*/);
     m_device_accelmag = new A_FXOS8700(/*0x8700A, 0x8700B*/);
+    m_air_can = new TAirCan(SPI_CS_PIN, CAN_500KBPS);
 
     onCommandLoad();
 
@@ -102,6 +112,10 @@ bool TApplication::init()
 
     if(m_settings->m_save_count == 0)
         return true;
+
+    if(!m_air_can->init()) {
+        Serial.print("CAN init faild!");
+    }
 
     Serial.print("AHRS Ver ");
     Serial.println(AHRS_VERSION);
@@ -278,6 +292,10 @@ void TApplication::updateDriftCoefByAngles()
     float neta = m_settings->neta;
 
     // TODO change beta zeta by mag change speed
+    // Change neta by mac roll
+    TPoint3F angles = m_ahrs->getAngles();
+    if(fabsf(angles.x) > 5 * CONVERT_DPS_TO_RAD )
+        neta = 0;
 
     m_ahrs->setGyroMeas(beta, zeta, neta);
 
@@ -329,22 +347,34 @@ void TApplication::loop()
 
 
 void TApplication::printOut() {
+#if DEFAULT_ORIENTATION_ENABLE
     TQuaternionF q = m_ahrs->m_q * m_settings->sensor_to_frame_orientation;
     TPoint3F angles = q.getAngles();
-    //TPoint3F angles = m_ahrs->getAngles();
-    Serial.print("Orient: ");
-    PrintVector(angles * CONVERT_RAD_TO_DPS);
+#else
+    TPoint3F angles = m_ahrs->getAngles();
+#endif
 
-    //Serial.print("acc: ");
     TPoint3F acc = getAcc();
-    PrintVector(acc);
+#if CAN_PRINT
+    float g = acc.length() / SENSORS_GRAVITY_STANDARD;
+    float g_angle = atan2(-acc.y, acc.z);
+    sendCan(angles, g, g_angle);
+#endif
 
-    //Serial.print("t: ");
-    Serial.print(int(getTemperature()));
-    Serial.print(" ");
+#if SERIAL_PRINT
 
-    if(m_settings->print_mag) {        
-       // Serial.print(" gerr: ");
+    if(m_settings->print_mag) {
+        Serial.print("O: ");
+        PrintVector(angles * CONVERT_RAD_TO_DPS);
+
+        //Serial.print("acc: ");
+        PrintVector(acc);
+
+        //Serial.print("t: ");
+        Serial.print(int(getTemperature()));
+        Serial.print(" ");
+
+        // Serial.print(" gerr: ");
         PrintVector(m_ahrs->m_gyro_error * CONVERT_RAD_TO_DPS);
         //PrintVector(m_ahrs->m_unstable_time * FLOAT_FACKTOR);
 
@@ -362,21 +392,25 @@ void TApplication::printOut() {
         PrintVector(m_mag_value);
         //Serial.print("north: ");
         PrintVector(m_ahrs->m_mag_horisontal);
+        Serial.println();
     }
-    Serial.println();
 
-//    if(m_device_gyro->m_too_slow) {
-//        Serial.println(m_device_gyro->m_too_slow);
-//        m_device_gyro->m_too_slow = 0;
-//    }
+#endif
 
-
-    //Serial.print("q_dor: ");
-    //PrintQuaternion(m_ahrs->m_q_dot * 1000);
-//    Serial.print("zeta: ");
-//    Serial.print((m_ahrs->zeta * CONVERT_RAD_TO_DPS) / sqrt(3.0f / 4.0f) );
 }
 
+#include "shared/CanMessage/TCanMessageEFISOrientation.h"
+void TApplication::sendCan(const TPoint3F& angles, float g, float g_angle)
+{
+    TCanMessageEFISOrientation msg;
+    msg.setRoll(angles.x);
+    msg.setPitch(angles.y);
+    msg.setYaw(angles.z);
+
+    msg.setG(g);
+    msg.setGAngle(g_angle);
+    m_air_can->sendMessage(&msg);
+}
 
 
 float GetDeltaTime(unsigned long& last_time, float min_dt)
@@ -397,8 +431,13 @@ float GetDeltaTime(unsigned long& last_time, float min_dt)
 void TApplication::onCommandResetPitchRoll() {
     //Serial.println("Reset pitch and roll");
     TPoint3F angles = m_ahrs->getAngles();
+#if DEFAULT_ORIENTATION_ENABLE
+
     TPoint3F angles_def = m_settings->sensor_to_frame_orientation.getAngles();
     m_ahrs->setOrientation(TQuaternionF::CreateFormAngles(-angles_def.x,-angles_def.y,angles.z));
+#else
+     m_ahrs->setOrientation(TQuaternionF::CreateFormAngles(0,0,angles.z));
+#endif
 }
 
 void TApplication::onCommandSetYawByMag() {       
@@ -413,17 +452,17 @@ void TApplication::onCommandSetPitchRollByAcc() {
     //TODO
 }
 
+#if DEFAULT_ORIENTATION_ENABLE
 void TApplication::onCommandSetGravityVector() {
-
     TPoint3F angles = (m_ahrs->m_q * m_settings->sensor_to_frame_orientation).getAngles();
     m_settings->sensor_to_frame_orientation *= TQuaternionF::CreateFormAngles( -angles.x , -angles.y , 0) ;
 }
 
 void TApplication::onCommandSetMagnitudeVector() {
-
     TPoint3F angles = (m_ahrs->m_q * m_settings->sensor_to_frame_orientation).getAngles();
     m_settings->sensor_to_frame_orientation *= TQuaternionF::CreateFormAngles( 0,0,-angles.z) ;
 }
+#endif
 
 void TApplication::onCommandCalibrateGyro()
 {
@@ -490,9 +529,12 @@ void ReadVector(TPoint3F& vec, const char* msg) {
     vec.x = Serial.parseInt() / FLAOT_FACKTOR_READ;
     vec.y = Serial.parseInt() / FLAOT_FACKTOR_READ;
     vec.z = Serial.parseInt() / FLAOT_FACKTOR_READ;
+
+#if SERIAL_PRINT
     Serial.print(msg);
     PrintVector(vec);
     Serial.println();
+#endif
 }
 
 void TApplication::onCommandSetMagnitudeMatrix() {
@@ -572,50 +614,50 @@ void TApplication::onCommandSave() {
 
 void TApplication::onCommandDebugAction()
 {
-    Serial.println("Debug");
-    static int variant = -1;
+//    Serial.println("Debug");
+//    static int variant = -1;
 
-    variant++;
-    float roll = 0;
-    float pitch = 0;
-    float yaw = 0;
+//    variant++;
+//    float roll = 0;
+//    float pitch = 0;
+//    float yaw = 0;
 
 
-    switch (variant % 3) {
-    case 1:
-        roll = -45;
-        break;
-    case 2:
-        roll = 45   ;
-        break;
-    }
+//    switch (variant % 3) {
+//    case 1:
+//        roll = -45;
+//        break;
+//    case 2:
+//        roll = 45   ;
+//        break;
+//    }
 
-    switch (variant / 3 ) {
-    case 1:
-        pitch = 45;
-        break;
-    case 2:
-        pitch = -45;
-        break;
+//    switch (variant / 3 ) {
+//    case 1:
+//        pitch = 45;
+//        break;
+//    case 2:
+//        pitch = -45;
+//        break;
 
-    case 3:
-        yaw = -145;
-        break;
+//    case 3:
+//        yaw = -145;
+//        break;
 
-    case 4:
-        yaw = -145;
-        pitch = 45;
-        break;
+//    case 4:
+//        yaw = -145;
+//        pitch = 45;
+//        break;
 
-    default:
-        break;
-    }
-    if(variant >= 3)
-        variant = 0;
+//    default:
+//        break;
+//    }
+//    if(variant >= 3)
+//        variant = 0;
 
-    //m_ahrs->setGyroError(TPoint3F(0,0,0));
-    m_ahrs->setOrientation(TQuaternionF::CreateFormAngles(roll * CONVERT_DPS_TO_RAD, pitch* CONVERT_DPS_TO_RAD, yaw* CONVERT_DPS_TO_RAD));
-    //m_ahrs->setGyroError(m_settings->gyro_zero_offset);
+//    //m_ahrs->setGyroError(TPoint3F(0,0,0));
+//    m_ahrs->setOrientation(TQuaternionF::CreateFormAngles(roll * CONVERT_DPS_TO_RAD, pitch* CONVERT_DPS_TO_RAD, yaw* CONVERT_DPS_TO_RAD));
+//    //m_ahrs->setGyroError(m_settings->gyro_zero_offset);
 }
 
 inline void ChangeRangeFlags(uint8_t& range, const uint8_t& range_count, bool& disable) {
@@ -677,30 +719,31 @@ void ChagneCoef(float& coef)
 
 
 void TApplication::receiveCmd() {
+#if COMMANS_ENABLE
     if (!Serial.available())
         return;
 
     uint8_t b = Serial.read();
     switch (b) {
     case E_CMD_CODE_NONE:
-    case E_CMD_CODE_CALIBRATION_STOP:
+//    case E_CMD_CODE_CALIBRATION_STOP:
         break;
-    case E_CMD_CODE_RESET_PITCH_ROLL:
-        return onCommandResetPitchRoll();
+//    case E_CMD_CODE_RESET_PITCH_ROLL:
+//        return onCommandResetPitchRoll();
 
-    case E_CMD_CODE_SET_YAW_BY_MAG:
-        return onCommandSetYawByMag();
+//    case E_CMD_CODE_SET_YAW_BY_MAG:
+//        return onCommandSetYawByMag();
 
-    case E_CMD_CODE_SET_PITCH_ROLL_BY_ACC:
-        return onCommandSetPitchRollByAcc();
+//    case E_CMD_CODE_SET_PITCH_ROLL_BY_ACC:
+//        return onCommandSetPitchRollByAcc();
 
-    case E_CMD_CODE_BOOST_FILTER:
-        onCommandBoostFilter(false);
-        Serial.println("Boost done");
-        return;
+//    case E_CMD_CODE_BOOST_FILTER:
+//        onCommandBoostFilter(false);
+//        Serial.println("Boost done");
+//        return;
 
-    case E_CMD_CODE_CALIBRATE_GYRO:
-        return onCommandCalibrateGyro();
+//    case E_CMD_CODE_CALIBRATE_GYRO:
+//        return onCommandCalibrateGyro();
 
     case E_CMD_CODE_SET_MAGNITUDE_OFFSET:
         ReadVector(m_settings->mag_offset, "m o");
@@ -708,44 +751,41 @@ void TApplication::receiveCmd() {
     case E_CMD_CODE_SET_MAGNITUDE_MATRIX:
         return onCommandSetMagnitudeMatrix();
 
-    case E_CMD_CODE_SET_ACC_OFFSET:
-        ReadVector(m_settings->acc_zero_offset, "a o");
-        break;
-    case E_CMD_CODE_SET_ACC_SCALE:
-        ReadVector(m_settings->acc_scale, "a s");
-        break;
+//    case E_CMD_CODE_SET_ACC_OFFSET:
+//        ReadVector(m_settings->acc_zero_offset, "a o");
+//        break;
+//    case E_CMD_CODE_SET_ACC_SCALE:
+//        ReadVector(m_settings->acc_scale, "a s");
+//        break;
 
-    case E_CMD_CODE_SET_GRAVITY_VECTOR:        
-        return onCommandSetGravityVector();
-    case E_CMD_CODE_SET_YAW_NORTH:        
-        return onCommandSetMagnitudeVector();
-    case E_CMD_CODE_DEFAULT_ORIENTATION:        
-        m_settings->sensor_to_frame_orientation = TQuaternionF(1,0,0,0);
-        break;
-    case E_CMD_CODE_DEBUG_ACTION:
-        return onCommandDebugAction();
+//    case E_CMD_CODE_SET_GRAVITY_VECTOR:
+//        return onCommandSetGravityVector();
+//    case E_CMD_CODE_SET_YAW_NORTH:
+//        return onCommandSetMagnitudeVector();
+//    case E_CMD_CODE_DEFAULT_ORIENTATION:
+//        m_settings->sensor_to_frame_orientation = TQuaternionF(1,0,0,0);
+//        break;
+//    case E_CMD_CODE_DEBUG_ACTION:
+//        return onCommandDebugAction();
 
     case E_CMD_CODE_TOGGLE_PRINT_MODE:
-        ToggleFlag(m_settings->print_mag, "prnt mode", false);
+        ToggleFlag(m_settings->print_mag, "", false);
         break;
 
     case E_CMD_CODE_TOGGLE_GYRO:        
         onChangeGyroRange();
         onSettingsChanged();
         break;
-    case E_CMD_CODE_TOGGLE_ACC:
-        //onChangeAccRange();
+    case E_CMD_CODE_TOGGLE_ACC:        
         ToggleFlag(m_settings->disable_acc, MSG_ACCEL, true);
         break;
     case E_CMD_CODE_TOGGLE_MAG:
         ToggleFlag(m_settings->disable_mag, MSG_MAGNIT, true);
         break;
-
     case E_CMD_CODE_CHANGE_BETA:
         ChagneCoef(m_settings->beta);
         onSettingsChanged();
         break;
-
     case E_CMD_CODE_CHANGE_ZETA:
         ChagneCoef(m_settings->zeta);
         onSettingsChanged();
@@ -770,6 +810,7 @@ void TApplication::receiveCmd() {
     default:
         Serial.println(MSG_FAIL);
     }
+#endif
 }
 
 

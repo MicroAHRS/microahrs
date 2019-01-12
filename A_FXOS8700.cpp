@@ -29,8 +29,7 @@
 #define ACCEL_MG_LSB_8G (0.000976F)
 #define MAG_UT_LSB      (0.1F)
 
-#define SENSORS_GRAVITY_EARTH             (9.80665F)              /**< Earth's gravity in m/s^2 */
-#define SENSORS_GRAVITY_STANDARD          (SENSORS_GRAVITY_EARTH)
+
 
 // see https://www.nxp.com/docs/en/data-sheet/FXOS8700CQ.pdf
 /***************************************************************************

@@ -183,6 +183,7 @@ void TAHRSMadgwick::compensateGyroDrift(
     err.x = q.w * s.x - q.x * s.w -  q.y * s.z + q.z * s.y;
     err.y = q.w * s.y + q.x * s.z -  q.y * s.w - q.z * s.x;
     err.z = q.w * s.z - q.x * s.y +  q.y * s.x - q.z * s.w;
+
     err *= 2.0f * dt * zeta;
     m_gyro_error.x += CompensateGyroChannel(gyro.x , err.x , m_correction_direction.x , m_correction_switch_time.x , m_unstable_time.x, dt);
     m_gyro_error.y += CompensateGyroChannel(gyro.y , err.y , m_correction_direction.y , m_correction_switch_time.y , m_unstable_time.y, dt);

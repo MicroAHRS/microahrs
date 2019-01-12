@@ -24,6 +24,8 @@
 //#include "A_Sensor.h"
 //#include <Wire.h>
 
+#define SENSORS_GRAVITY_EARTH             (9.80665F)              /**< Earth's gravity in m/s^2 */
+#define SENSORS_GRAVITY_STANDARD          (SENSORS_GRAVITY_EARTH)
 
 
 enum EFXOS8700Register

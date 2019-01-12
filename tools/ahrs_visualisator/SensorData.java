@@ -64,9 +64,9 @@ final public class SensorData {
         
     private int readAngles(String[] list, int l) {
         if (list.length >= l+3) {
-            m_angles.x  = Float.parseFloat(list[l++]); // convert to float roll
-            m_angles.y  = Float.parseFloat(list[l++]); // convert to float pitch
-            m_angles.z  = Float.parseFloat(list[l++]); // convert to float yaw
+            m_angles.x  = Float.parseFloat(list[l++]) / FLOAT_FACKTOR; // convert to float roll
+            m_angles.y  = Float.parseFloat(list[l++]) / FLOAT_FACKTOR; // convert to float pitch
+            m_angles.z  = Float.parseFloat(list[l++]) / FLOAT_FACKTOR; // convert to float yaw
         }
         return l;
     }
@@ -224,7 +224,7 @@ final public class SensorData {
         if (list.length <= 0)
             return false;
             
-        if(list[0].equals("Orient:"))
+        if(list[0].equals("O:"))
             return onMessageOrient(list);
                             
         return false;
