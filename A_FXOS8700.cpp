@@ -1,19 +1,37 @@
-/***************************************************
-  This is a library for the FXOS8700 Accel/Mag
-
-  Designed specifically to work with the Adafruit FXOS8700 Breakout
-  ----> https://www.adafruit.com/products/
-
-  These sensors use I2C to communicate, 2 pins (I2C)
-  are required to interface.
-
-  Adafruit invests time and resources providing this open source code,
-  please support Adafruit and open-source hardware by purchasing
-  products from Adafruit!
-
-  Written by Kevin "KTOWN" Townsend for Adafruit Industries.
-  BSD license, all text above must be included in any redistribution
- ****************************************************/
+/*!
+ * @file Adafruit_FXOS8700.cpp
+ *
+ * @mainpage Adafruit FXOS8700 accel/mag sensor driver
+ *
+ * @section intro_sec Introduction
+ *
+ * This is the documentation for Adafruit's FXOS8700 driver for the
+ * Arduino platform.  It is designed specifically to work with the
+ * Adafruit FXOS8700 breakout: https://www.adafruit.com/products/3463
+ *
+ * These sensors use I2C to communicate, 2 pins (SCL+SDA) are required
+ * to interface with the breakout.
+ *
+ * Adafruit invests time and resources providing this open source code,
+ * please support Adafruit and open-source hardware by purchasing
+ * products from Adafruit!
+ *
+ * @section dependencies Dependencies
+ *
+ * This library depends on <a
+ * href="https://github.com/adafruit/Adafruit_Sensor"> Adafruit_Sensor</a> being
+ * present on your system. Please make sure you have installed the latest
+ * version before using this library.
+ *
+ * @section author Author
+ *
+ * Written by Kevin "KTOWN" Townsend for Adafruit Industries.
+ *
+ * @section license License
+ *
+ * MIT license, all text here must be included in any redistribution.
+ *
+ */
 
 //#include "Arduino.h"
 
@@ -45,7 +63,7 @@ void A_FXOS8700::write8(uint8_t reg, uint8_t value)
     Wire.endTransmission();
 }
 uint8_t A_FXOS8700::read8(uint8_t reg)
-{  
+{
     Wire.beginTransmission((uint8_t)FXOS8700_ADDRESS);
 
     Wire.write((uint8_t)reg);
@@ -104,7 +122,7 @@ union FXOS8700Reg_MCTRL_REG_1
 };
 
 A_FXOS8700::A_FXOS8700()
-{    
+{
 }
 
 bool A_FXOS8700::begin(uint8_t rng)

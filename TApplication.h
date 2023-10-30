@@ -1,3 +1,16 @@
+/*!
+ *
+ *
+ * @section author Author
+ *
+ * Written by Evgeny Pronin titan.the.proger@gmail.com
+ * https://github.com/MicroAHRS
+ *
+ * @section license License
+ *
+ * MIT license, all text here must be included in any redistribution.
+ *
+ */
 #ifndef TAPPLICATIONARDUINO_H
 #define TAPPLICATIONARDUINO_H
 
@@ -45,7 +58,7 @@ protected:
     void update(float dt);
     void updateDevices(float dt) ;
     void updateCalibration(float dt);
-    void updateAHRS(float dt);    
+    void updateAHRS(float dt);
     void updateDriftCoefByAngles();
 
     void updateCalibrationAcc(float dt);

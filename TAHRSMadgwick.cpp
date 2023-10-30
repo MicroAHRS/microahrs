@@ -1,12 +1,19 @@
-//=============================================================================================
-// Madgwick.c
-//=============================================================================================
-//
-// Implementation of Madgwick's IMU and AHRS algorithms.
-// See: http://www.x-io.co.uk/open-source-imu-and-ahrs-algorithms/
-// see @link = https://github.com/ccny-ros-pkg/imu_tools/tree/indigo/imu_filter_madgwick
-//-------------------------------------------------------------------------------------------
-// Header files
+/*!
+ *
+ * Implementation of Madgwick's IMU and AHRS algorithms.
+ * See: http://www.x-io.co.uk/open-source-imu-and-ahrs-algorithms/
+ * see @link = https://github.com/ccny-ros-pkg/imu_tools/tree/indigo/imu_filter_madgwick
+ *
+ * @section author Author
+ *
+ * Written by Evgeny Pronin titan.the.proger@gmail.com
+ * https://github.com/MicroAHRS
+ *
+ * @section license License
+ *
+ * MIT license, all text here must be included in any redistribution.
+ *
+ */
 
 #include "TAHRSMadgwick.h"
 #include <math.h>
@@ -86,7 +93,7 @@ static inline TQuaternionF orientationChangeFromGyro(
     const TPoint3F& gyro)
 {
     // Rate of change of quaternion from gyroscope
-    // See EQ 12    
+    // See EQ 12
     // Qdot = 0.5 * q * gyro
     return  q * 0.5f * TQuaternionF(gyro);
 }
@@ -97,11 +104,11 @@ static TQuaternionF addGradientDescentStep(
     const TPoint3F& source,    // вектор в локальной систее - длинна 1
         TPoint3F& dest_local  // dest vector at local system - for reuse
         )
-{    
+{
     TQuaternionF result;
 
     // Gradient decent algorithm corrective step
-    // EQ 15, 21    
+    // EQ 15, 21
     dest_local = q.rotateVector(dest);
     TPoint3F delta = dest_local - source;
     TPoint3F d2 = dest*2;
@@ -170,7 +177,7 @@ void TAHRSMadgwick::compensateGyroDrift(
         const TQuaternionF& s,     // поправка кватрениона
         const TPoint3F& gyro,      // показания гиросокпа , 0 если канал отключен
         const float& dt)
-{   
+{
     TQuaternionF& q = m_q; //just reference
 
     // w_err = 2 q x s
@@ -265,7 +272,7 @@ inline TPoint3F TAHRSMadgwick::removeMagneticVertical(const TPoint3F& mag)
 }
 
 TQuaternionF TAHRSMadgwick::correctiveStepMag(TPoint3F& mag, const float &dt)
-{            
+{
     TQuaternionF result;
     if(mag.isZero() || neta == 0.0f)
         return result;
@@ -308,13 +315,13 @@ void TAHRSMadgwick::updateGyroAverage(TPoint3F& gyro, float dt)
 //////////////////////////////////////////////////////////////////
 
 void TAHRSMadgwick::update(TPoint3F gyro, TPoint3F acc, TPoint3F mag, float dt)
-{    
+{
     updateGyroAverage(gyro, dt);
     TQuaternionF q_dot;
     q_dot -= correctiveStepAccel(acc, dt);
     q_dot -= correctiveStepMag(mag, dt);
-    q_dot += orientationChangeFromGyro(m_q, gyro);    
-    changeOrientation(q_dot * dt);       
+    q_dot += orientationChangeFromGyro(m_q, gyro);
+    changeOrientation(q_dot * dt);
 }
 
 void TAHRSMadgwick::updateGyro(TPoint3F gyro, float dt) {
@@ -335,7 +342,7 @@ inline void TAHRSMadgwick::changeOrientation(const TQuaternionF& delta)
 {
 // TODO chek for NAN
     m_q += delta;
-    m_q.normalize();    
+    m_q.normalize();
 }
 
 void TAHRSMadgwick::setOrientation(const TQuaternionF& value) {

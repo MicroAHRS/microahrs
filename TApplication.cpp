@@ -1,3 +1,16 @@
+/*!
+ *
+ *
+ * @section author Author
+ *
+ * Written by Evgeny Pronin titan.the.proger@gmail.com
+ * https://github.com/MicroAHRS
+ *
+ * @section license License
+ *
+ * MIT license, all text here must be included in any redistribution.
+ *
+ */
 #include "TApplication.h"
 
 #include "ECommandCode.h"
@@ -45,7 +58,7 @@ TApplication::TApplication()
     m_temperature = 0;
     m_print_out_timer = 0;
     m_tick_count = 0;
-    m_last_update_time  = 0;    
+    m_last_update_time  = 0;
     //m_light_enabled = false;
     m_seconds_count = 0;
     m_fps = 0;
@@ -156,7 +169,7 @@ TPoint3F TApplication::getAcc() const {
 }
 
 void TApplication::update(float dt)
-{   
+{
     updateDevices(dt);
     updateAHRS(dt);
     updateCalibration(dt);
@@ -257,7 +270,7 @@ void TApplication::onCalibrationFinished() {
 
 void TApplication::updateAHRS(float dt) {
     TPoint3F mag = getMagn();
-    TPoint3F acc = getAcc();            
+    TPoint3F acc = getAcc();
 
     if(m_gyro_dt_filter > 0 && !m_settings->disable_gyro) {
         //m_gyro_dt_filter = 0.005f;
@@ -265,7 +278,7 @@ void TApplication::updateAHRS(float dt) {
         m_gyro_dt_filter = 0;
     }
 
-    if(m_acc_dt_filter > 0) {        
+    if(m_acc_dt_filter > 0) {
         m_ahrs->updateAccMag(acc,mag,m_acc_dt_filter);
         m_acc_dt_filter = 0;
     }
@@ -281,7 +294,7 @@ void TApplication::updateDriftCoefByAngles()
 
     float acc_len_square = getAcc().lengthSq();
     // if pitch or roll too big
-    // set beta to smoler value    
+    // set beta to smoler value
     if(!InRangeInc(acc_len_square, m_settings->acc_min_length_sq, m_settings->acc_max_length_sq )) {
         m_ahrs->setGyroMeas(0,0,0);
         return;
@@ -414,7 +427,7 @@ void TApplication::sendCan(const TPoint3F& angles, float g, float g_angle)
 
 
 float GetDeltaTime(unsigned long& last_time, float min_dt)
-{           
+{
     unsigned long ts = millis();
     if(last_time == 0) {
         last_time = ts;
@@ -440,7 +453,7 @@ void TApplication::onCommandResetPitchRoll() {
 #endif
 }
 
-void TApplication::onCommandSetYawByMag() {       
+void TApplication::onCommandSetYawByMag() {
     //Serial.println("Set yaw by mag");
     TPoint3F angles = m_ahrs->getAngles();
     TPoint3F mag = getMagn();
@@ -506,7 +519,7 @@ void TApplication::CalibrateGyroCycle(float beta_start, float beta_end, float ma
             printOut();
         }
 
-        float beta = Lerp(GetProgressSection(time,0,max_time), beta_start, beta_end);        
+        float beta = Lerp(GetProgressSection(time,0,max_time), beta_start, beta_end);
         float zeta = beta * 0.1;
         m_ahrs->setGyroMeas(beta,zeta,beta);
         updateDevices(dt);
@@ -516,7 +529,7 @@ void TApplication::CalibrateGyroCycle(float beta_start, float beta_end, float ma
 }
 
 void TApplication::CalibrateGyroStep1(float max_time)
-{                        
+{
     m_ahrs->setOrientation(TQuaternionF::Identity());
 
     CalibrateGyroCycle(1, 0, max_time, true);
@@ -556,7 +569,7 @@ void TApplication::onCommandSetMagnitudeMatrix() {
 }
 
 void TApplication::onCommandBoostFilter(bool boost_mag) {
-    //ускорить фильтр - чтобы выровнить ориентацию    
+    //ускорить фильтр - чтобы выровнить ориентацию
     TFunctionAverage<TPoint3F, float> avg_mag;
     TFunctionAverage<TPoint3F, float> avg_acc;
 
@@ -772,11 +785,11 @@ void TApplication::receiveCmd() {
         ToggleFlag(m_settings->print_mag, "", false);
         break;
 
-    case E_CMD_CODE_TOGGLE_GYRO:        
+    case E_CMD_CODE_TOGGLE_GYRO:
         onChangeGyroRange();
         onSettingsChanged();
         break;
-    case E_CMD_CODE_TOGGLE_ACC:        
+    case E_CMD_CODE_TOGGLE_ACC:
         ToggleFlag(m_settings->disable_acc, MSG_ACCEL, true);
         break;
     case E_CMD_CODE_TOGGLE_MAG:

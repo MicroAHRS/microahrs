@@ -1,11 +1,44 @@
+/*!
+ * @file Adafruit_FXAS21002C.cpp
+ *
+ * @mainpage Adafruit FXAS21002C gyroscope sensor driver
+ *
+ * @section intro_sec Introduction
+ *
+ * This is the documentation for Adafruit's FXAS21002C driver for the
+ * Arduino platform.  It is designed specifically to work with the
+ * Adafruit FXAS21002C breakout: https://www.adafruit.com/products/3463
+ *
+ * These sensors use I2C to communicate, 2 pins (SCL+SDA) are required
+ * to interface with the breakout.
+ *
+ * Adafruit invests time and resources providing this open source code,
+ * please support Adafruit and open-source hardware by purchasing
+ * products from Adafruit!
+ *
+ * @section dependencies Dependencies
+ *
+ * This library depends on <a
+ * href="https://github.com/adafruit/Adafruit_Sensor"> Adafruit_Sensor</a> being
+ * present on your system. Please make sure you have installed the latest
+ * version before using this library.
+ *
+ * @section author Author
+ *
+ * Written by Kevin "KTOWN" Townsend for Adafruit Industries.
+ *
+ * @section license License
+ *
+ * MIT license, all text here must be included in any redistribution.
+ *
+ */
+
 // see https://www.nxp.com/docs/en/data-sheet/FXAS21002.pdf
 
 //#include <limits.h>
 
 #include "A_FXAS21002C.h"
-
 #include "config.h"
-
 
 /*=========================================================================
 REGISTERS
@@ -128,7 +161,7 @@ void A_FXAS21002C::write8(uint8_t reg, uint8_t value)
 }
 
 uint8_t A_FXAS21002C::read8(uint8_t reg)
-{  
+{
     Wire.beginTransmission((uint8_t)FXAS21002C_ADDRESS);
     Wire.write((uint8_t)reg | 0x80);
     if (Wire.endTransmission(false) != 0)

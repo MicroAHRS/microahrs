@@ -1,5 +1,5 @@
-#ifndef __GAIJIN_CHIBILIB_MAX_HEADER_
-#define __GAIJIN_CHIBILIB_MAX_HEADER_
+#ifndef ___MAX_HEADER_
+#define ___MAX_HEADER_
 #ifdef _MSC_VER
 #  pragma once
 #endif
@@ -16,4 +16,4 @@ template <class T> const T &Min(const T &a, const T &b)
     return (a < b) ? a : b;
 }
 
-#endif //__GAIJIN_CHIBILIB_MAX_HEADER_
+#endif //___MAX_HEADER_

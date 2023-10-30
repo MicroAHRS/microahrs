@@ -1,3 +1,17 @@
+/*!
+ *
+ *
+ * @section author Author
+ *
+ * Written by Evgeny Pronin titan.the.proger@gmail.com
+ * https://github.com/MicroAHRS
+ *
+ * @section license License
+ *
+ * MIT license, all text here must be included in any redistribution.
+ *
+ */
+
 #ifndef __Madgwick2_h__
 #define __Madgwick2_h__
 
@@ -28,7 +42,7 @@ public:
     //float gama;
 
     TQuaternionF m_q;
-    TPoint3F     m_gyro_error;            
+    TPoint3F     m_gyro_error;
     TPoint3F     m_mag_horisontal;
     TPoint3F     m_gyro_avg;
 
@@ -62,7 +76,7 @@ public:
     inline void setGyroError(const TPoint3F& vec) { m_gyro_error = vec;}
     void setOrientation(const TQuaternionF& value);
 
-protected:        
+protected:
     inline void changeOrientation(const TQuaternionF& delta);
     void compensateGyroDrift( const TQuaternionF& s, const TPoint3F& gyro, const float& dt);
     TQuaternionF correctiveStepAccel(TPoint3F& acc, const float &dt);

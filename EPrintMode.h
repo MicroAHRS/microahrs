@@ -1,3 +1,15 @@
+/*!
+ *
+ *
+ * @section author Author
+ *
+ * Written by Evgeny Pronin titan.the.proger@gmail.com
+ *
+ * @section license License
+ *
+ * MIT license, all text here must be included in any redistribution.
+ *
+ */
 #ifndef EPRINTMODE_H
 #define EPRINTMODE_H
 

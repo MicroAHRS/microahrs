@@ -1,3 +1,15 @@
+/*!
+ *
+ *
+ * @section author Author
+ *
+ * Written by Evgeny Pronin titan.the.proger@gmail.com
+ *
+ * @section license License
+ *
+ * MIT license, all text here must be included in any redistribution.
+ *
+ */
 #include "TAppSettings.h"
 #define DEVICE_SET_1
 //#define DEVICE_SET_2
@@ -95,7 +107,7 @@ void TAppSettings::initDefault() {
 }
 
 
-bool TAppSettings::load() {    
+bool TAppSettings::load() {
     g_storage.get(SETTINGS_ADDRESS, *this);
     if(version != getVersion())
         return false;

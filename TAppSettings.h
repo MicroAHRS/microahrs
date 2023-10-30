@@ -1,3 +1,15 @@
+/*!
+ *
+ *
+ * @section author Author
+ *
+ * Written by Evgeny Pronin titan.the.proger@gmail.com
+ *
+ * @section license License
+ *
+ * MIT license, all text here must be included in any redistribution.
+ *
+ */
 #ifndef TAPPSETTINGS_H
 #define TAPPSETTINGS_H
 
@@ -23,8 +35,8 @@ public:
     uint8_t getVersion() const {return 1;}
 public:
     uint8_t version;
-    float beta;    
-    float zeta;        
+    float beta;
+    float zeta;
     float neta;
 
     bool disable_gyro;

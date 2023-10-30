@@ -1,12 +1,12 @@
-#ifndef __GAIJIN_CHIBILIB_IN_RANGE_HEADER_
-#define __GAIJIN_CHIBILIB_IN_RANGE_HEADER_
+#ifndef __IN_RANGE_HEADER_
+#define __IN_RANGE_HEADER_
 #ifdef _MSC_VER
 #  pragma once
 #endif
 
 #include <assert.h>
 
-///x - в промежутке [a, b) исключая b. 
+///x - в промежутке [a, b) исключая b.
 template <class T, class T1, class T2>
 inline bool InRange(const T &x, const T1 &a, const T2 &b)
 {
@@ -46,4 +46,4 @@ inline float Lerp(float progress, float from, float to )
     return from * (1.0 - progress) + to * progress;
 }
 
-#endif //__GAIJIN_CHIBILIB_IN_RANGE_HEADER_
+#endif //__IN_RANGE_HEADER_

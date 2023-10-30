@@ -1,19 +1,22 @@
-/***************************************************
-  This is a library for the FXAS21002C Gyroscope
-
-  Designed specifically to work with the Adafruit FXAS21002C Breakout
-  ----> https://www.adafruit.com/products
-
-  These sensors use I2C to communicate, 2 pins (I2C)
-  are required to interface.
-
-  Adafruit invests time and resources providing this open source code,
-  please support Adafruit and open-source hardware by purchasing
-  products from Adafruit!
-
-  Written by Kevin "KTOWN" Townsend for Adafruit Industries.
-  BSD license, all text above must be included in any redistribution
- ****************************************************/
+/*!
+ * @file Adafruit_FXAS21002C.h
+ *
+ * This is part of Adafruit's FXAS21002C driver for the Arduino platform.  It
+ * is designed specifically to work with the Adafruit FXAS21002C breakout:
+ * https://www.adafruit.com/products/3463
+ *
+ * These sensors use I2C to communicate, 2 pins (SCL+SDA) are required
+ * to interface with the breakout.
+ *
+ * Adafruit invests time and resources providing this open source code,
+ * please support Adafruit and open-source hardware by purchasing
+ * products from Adafruit!
+ *
+ * Written by Kevin "KTOWN" Townsend for Adafruit Industries.
+ *
+ * MIT license, all text here must be included in any redistribution.
+ *
+ */
 #ifndef __FXAS21002C_H__
 #define __FXAS21002C_H__
 
@@ -38,7 +41,7 @@ public:
     A_FXAS21002C();
 
 
-    bool begin           ( uint8_t rng = GYRO_RANGE_250DPS );    
+    bool begin           ( uint8_t rng = GYRO_RANGE_250DPS );
     bool getGyro         ( TPoint3F& gyro);
     void getTemp         ( float& temp );
 
@@ -55,7 +58,7 @@ protected:
 
     inline float getSensitivity(const EGyroRange& rng );
 
-    EGyroRange  m_range_code;    
+    EGyroRange  m_range_code;
 };
 
 #endif
